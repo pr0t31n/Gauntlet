@@ -1,0 +1,675 @@
+{% extends "base.html" %}
+
+{% block title %}Gauntlet — Edit Project{% endblock %}
+
+{% block nav_extra %}
+<a href="{{ url_for('index') }}" class="nav-back-btn"><span class="nav-back-arrow">←</span><span class="nav-back-text"> Console</span></a>
+{% endblock %}
+
+{% block content %}
+<div class="page-container" style="max-width:860px">
+
+  <div class="title-ornament"><span>⚙</span></div>
+  <h1 class="page-title">Edit Assessment Project</h1>
+  <p class="page-subtitle">Update project details — changes will be saved to the project YAML</p>
+
+  <!-- Validation errors -->
+  <div class="error-list hidden" id="validationErrors">
+    <div class="error-list-title">⚠ Missing Required Fields</div>
+    <ul id="errorListItems"></ul>
+  </div>
+
+  <form id="newProjectForm" novalidate autocomplete="off">
+    <input type="hidden" id="projectId" value="{{ project_id }}">
+
+    <!-- ═══ Section 1: Target Directory (always visible) ═══ -->
+    <div class="form-section" id="sec-dir">
+      <div class="form-section-title">⚙ Target Directory</div>
+      <div class="form-group">
+        <label class="form-label" for="targetDir">Project Parent Directory <span class="required">*</span></label>
+        <input type="text" id="targetDir" name="target_dir" class="form-control"
+          placeholder="/path/to/projects/client_name" required>
+        <span class="form-hint">Full server-side path. A subfolder will be created here for the project YAML.</span>
+      </div>
+    </div>
+
+    <!-- ═══ Section 2: Client Information ═══ -->
+    <div class="form-section hidden" id="sec-client">
+      <div class="form-section-title">◈ Client Information</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="clientName">Client Full Name <span class="required">*</span></label>
+          <input type="text" id="clientName" name="client_name" class="form-control"
+            placeholder="Acme Corporation" required>
+        </div>
+        <div class="form-group" id="fg-clientShort" style="opacity:.4;transition:opacity .3s">
+          <label class="form-label" for="clientShort">Client Short Name <span class="required">*</span></label>
+          <input type="text" id="clientShort" name="client_short" class="form-control"
+            placeholder="ACME" maxlength="12" required disabled>
+          <span class="form-hint">Abbreviated identifier (max 12 chars)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Section 3: Consultant ═══ -->
+    <div class="form-section hidden" id="sec-consultant">
+      <div class="form-section-title">◈ Consultant Information</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="consultantName">Consultant Name <span class="required">*</span></label>
+          <input type="text" id="consultantName" name="consultant_name" class="form-control"
+            placeholder="Jane Smith" required>
+        </div>
+        <div class="form-group" id="fg-consultantTitle" style="opacity:.4;transition:opacity .3s">
+          <label class="form-label" for="consultantTitle">Title <span class="required">*</span></label>
+          <input type="text" id="consultantTitle" name="consultant_title" class="form-control"
+            placeholder="Senior Security Engineer" required disabled>
+        </div>
+      </div>
+      <div class="form-group" id="fg-consultantEmail" style="opacity:.4;transition:opacity .3s">
+        <label class="form-label" for="consultantEmail">Consultant Email <span class="required">*</span></label>
+        <input type="email" id="consultantEmail" name="consultant_email" class="form-control"
+          placeholder="jsmith@company.com" required disabled>
+      </div>
+    </div>
+
+    <!-- ═══ Section 4: Client POC ═══ -->
+    <div class="form-section hidden" id="sec-poc">
+      <div class="form-section-title">◈ Client Point of Contact</div>
+      <div class="form-group">
+        <label class="form-label" for="pocName">POC Name <span class="required">*</span></label>
+        <input type="text" id="pocName" name="poc_name" class="form-control"
+          placeholder="John Doe" required>
+      </div>
+      <div class="form-row">
+        <div class="form-group" id="fg-pocPhone" style="opacity:.4;transition:opacity .3s">
+          <label class="form-label" for="pocPhone">POC Phone</label>
+          <input type="tel" id="pocPhone" name="poc_phone" class="form-control"
+            placeholder="+1 (555) 000-0000" disabled>
+        </div>
+        <div class="form-group" id="fg-pocEmail" style="opacity:.4;transition:opacity .3s">
+          <label class="form-label" for="pocEmail">POC Email <span class="required">*</span></label>
+          <input type="email" id="pocEmail" name="poc_email" class="form-control"
+            placeholder="jdoe@client.com" required disabled>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Section 5: Project Dates ═══ -->
+    <div class="form-section hidden" id="sec-dates">
+      <div class="form-section-title">⊙ Assessment Dates &amp; Version</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="projYear">Year <span class="required">*</span></label>
+          <input type="number" id="projYear" name="year" class="form-control"
+            placeholder="2025" min="2000" max="2100" value="{{ now_year }}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="projVersion">Report Version</label>
+          <input type="text" id="projVersion" name="version" class="form-control"
+            placeholder="1.0" value="1.0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="startDate">Start Date (MM/DD/YYYY) <span class="required">*</span></label>
+          <input type="text" id="startDate" name="start_date" class="form-control"
+            placeholder="01/15/2025" pattern="\d{2}/\d{2}/\d{4}" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="endDate">End Date (MM/DD/YYYY) <span class="required">*</span></label>
+          <input type="text" id="endDate" name="end_date" class="form-control"
+            placeholder="01/30/2025" pattern="\d{2}/\d{2}/\d{4}" required>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Section 6: Device ═══ -->
+    <div class="form-section hidden" id="sec-device">
+      <div class="form-section-title">⚙ Device Under Test</div>
+      <div class="form-group">
+        <label class="form-label" for="deviceName">Device Name <span class="required">*</span></label>
+        <input type="text" id="deviceName" name="device" class="form-control"
+          placeholder="Industrial Control Unit" required>
+      </div>
+      <div class="form-row">
+        <div class="form-group" id="fg-deviceModel" style="opacity:.4;transition:opacity .3s">
+          <label class="form-label" for="deviceModel">Model Number <span class="required">*</span></label>
+          <input type="text" id="deviceModel" name="device_model" class="form-control"
+            placeholder="ICU-3000-A" required disabled>
+        </div>
+        <div class="form-group" id="fg-deviceSW" style="opacity:.4;transition:opacity .3s">
+          <label class="form-label" for="deviceSW">Software Version <span class="required">*</span></label>
+          <input type="text" id="deviceSW" name="device_sw_version" class="form-control"
+            placeholder="v2.4.1" required disabled>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Section 7: Subdevices ═══ -->
+    <div class="form-section hidden" id="sec-subdevices">
+      <div class="form-section-title">◈ Sub-Devices &amp; Interfaces</div>
+      <div class="form-group">
+        <label class="form-label" for="numSubdevices">Number of Sub-Devices <span class="required">*</span></label>
+        <select id="numSubdevices" name="num_subdevices" class="form-control" style="max-width:180px">
+          <option value="">— Select —</option>
+          {% for n in range(1, 11) %}
+          <option value="{{ n }}">{{ n }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <!-- Subdevice blocks injected here by JS -->
+      <div id="subdeviceContainer"></div>
+    </div>
+
+    <!-- ═══ Create Button Area ═══ -->
+    <div class="form-section hidden" id="sec-submit" style="text-align:center">
+      <button type="button" class="btn btn-primary btn-lg btn-disabled" id="createBtn" disabled>
+        <span id="createBtnIcon">⚙</span>
+        <span id="createBtnText">Submit Changes</span>
+      </button>
+      <p class="form-hint mt-1">All required fields must be filled before this activates.</p>
+    </div>
+
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ──────────────────────────────────────────────────────────────────────────────
+//  Edit Project — Progressive Form Expansion & Submission
+// ──────────────────────────────────────────────────────────────────────────────
+(function () {
+  'use strict';
+
+  const INTERFACE_TYPES = {{ interface_types | tojson }};
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+  const show = el => { if (el) el.classList.remove('hidden'); };
+  const hide = el => { if (el) el.classList.add('hidden'); };
+  const enable = (el, fg) => {
+    if (el) { el.disabled = false; }
+    if (fg) { fg.style.opacity = '1'; }
+  };
+  const filled = el => el && el.value.trim() !== '';
+
+  // ── Progressive reveal ───────────────────────────────────────────────────────
+  const targetDir = $('targetDir');
+  const clientName = $('clientName');
+  const clientShort = $('clientShort');
+  const consultantName = $('consultantName');
+  const consultantTitle = $('consultantTitle');
+  const consultantEmail = $('consultantEmail');
+  const pocName = $('pocName');
+  const pocPhone = $('pocPhone');
+  const pocEmail = $('pocEmail');
+  const projYear = $('projYear');
+  const startDate = $('startDate');
+  const endDate = $('endDate');
+  const deviceName = $('deviceName');
+  const deviceModel = $('deviceModel');
+  const deviceSW = $('deviceSW');
+  const numSubdevices = $('numSubdevices');
+
+  function onAnyInput() {
+    // Dir → show client section
+    if (filled(targetDir)) show($('sec-client'));
+
+    // clientName → enable clientShort
+    if (filled(clientName)) {
+      enable(clientShort, $('fg-clientShort'));
+    }
+
+    // clientShort → show consultant section
+    if (filled(clientName) && filled(clientShort)) show($('sec-consultant'));
+
+    // consultantName → enable title
+    if (filled(consultantName)) enable(consultantTitle, $('fg-consultantTitle'));
+
+    // title → enable email
+    if (filled(consultantTitle)) enable(consultantEmail, $('fg-consultantEmail'));
+
+    // consultant full → show poc
+    if (filled(consultantName) && filled(consultantTitle) && filled(consultantEmail)) {
+      show($('sec-poc'));
+    }
+
+    // pocName → enable phone
+    if (filled(pocName)) enable(pocPhone, $('fg-pocPhone'));
+
+    // pocPhone → enable email (phone is optional, so just reveal after name)
+    if (filled(pocName)) enable(pocEmail, $('fg-pocEmail'));
+
+    // poc email → show dates
+    if (filled(pocName) && filled(pocEmail)) show($('sec-dates'));
+
+    // dates complete → show device
+    if (filled(pocName) && filled(pocEmail) && filled(projYear) && filled(startDate) && filled(endDate)) {
+      show($('sec-device'));
+    }
+
+    // deviceName → enable model
+    if (filled(deviceName)) enable(deviceModel, $('fg-deviceModel'));
+
+    // model → enable sw version
+    if (filled(deviceModel)) enable(deviceSW, $('fg-deviceSW'));
+
+    // device complete → show subdevices
+    if (filled(deviceName) && filled(deviceModel) && filled(deviceSW)) {
+      show($('sec-subdevices'));
+    }
+
+    // always try to show submit section if enough info
+    show($('sec-submit'));
+
+    validateAndUpdateButton();
+  }
+
+  // ── Subdevice Builder ────────────────────────────────────────────────────────
+  let currentSubdeviceCount = 0;
+
+  numSubdevices.addEventListener('change', () => {
+    const n = parseInt(numSubdevices.value) || 0;
+    buildSubdevices(n);
+    onAnyInput();
+  });
+
+  function buildSubdevices(n) {
+    const container = $('subdeviceContainer');
+    // keep existing entries up to n, remove extras
+    const existing = container.querySelectorAll('.subdevice-block');
+    // Remove extras
+    [...existing].slice(n).forEach(el => el.remove());
+    // Add new ones
+    for (let i = existing.length + 1; i <= n; i++) {
+      container.appendChild(makeSubdeviceBlock(i));
+    }
+    currentSubdeviceCount = n;
+  }
+
+  function makeSubdeviceBlock(index) {
+    const div = document.createElement('div');
+    div.className = 'subdevice-block';
+    div.id = `sd-block-${index}`;
+    div.dataset.sdIndex = index;
+
+    div.innerHTML = `
+      <div class="subdevice-number">Sub-Device ${index}</div>
+      <div class="form-group">
+        <label class="form-label" for="sd_name_${index}">Sub-Device Name <span class="required">*</span></label>
+        <input type="text" id="sd_name_${index}" class="form-control sd-name"
+          data-sd="${index}" placeholder="Main Board / Module A / etc." required>
+      </div>
+      <div id="sd-ifaces-section-${index}" class="hidden">
+        <div class="form-section-title" style="margin-top:.75rem">Interface Types</div>
+        <div class="checkbox-grid" id="sd-iface-checks-${index}">
+          ${INTERFACE_TYPES.map(t => `
+            <label class="checkbox-item" id="cb-label-${index}-${t}">
+              <input type="checkbox" class="iface-check" data-sd="${index}" data-iface="${t}" value="${t}">
+              ${t}
+            </label>`).join('')}
+        </div>
+        <div id="sd-iface-details-${index}"></div>
+      </div>`;
+
+    // Reveal interface section when name is filled
+    div.querySelector('.sd-name').addEventListener('input', function () {
+      const sec = document.getElementById(`sd-ifaces-section-${index}`);
+      if (this.value.trim()) show(sec);
+      else hide(sec);
+      onAnyInput();
+    });
+
+    // Handle interface checkbox changes
+    div.querySelectorAll('.iface-check').forEach(cb => {
+      cb.addEventListener('change', function () {
+        const label = document.getElementById(`cb-label-${index}-${this.dataset.iface}`);
+        if (this.checked) label.classList.add('checked');
+        else              label.classList.remove('checked');
+        syncIfaceDetail(index, this.dataset.iface, this.checked);
+        onAnyInput();
+      });
+    });
+
+    return div;
+  }
+
+  function syncIfaceDetail(sdIdx, iface, checked) {
+    const container = document.getElementById(`sd-iface-details-${sdIdx}`);
+    const existingId = `iface-grp-${sdIdx}-${iface}`;
+    const existing = document.getElementById(existingId);
+
+    if (!checked) {
+      if (existing) existing.remove();
+      return;
+    }
+
+    if (existing) return; // already there
+
+    const grp = document.createElement('div');
+    grp.className = 'iface-group';
+    grp.id = existingId;
+    grp.dataset.iface = iface;
+    grp.dataset.sd = sdIdx;
+
+    grp.innerHTML = `
+      <div class="iface-group-header">⬡ ${iface}</div>
+      <div class="form-group" style="max-width:200px">
+        <label class="form-label" for="iface-count-${sdIdx}-${iface}">
+          Number of Instances <span class="required">*</span>
+        </label>
+        <select id="iface-count-${sdIdx}-${iface}" class="form-control iface-count"
+          data-sd="${sdIdx}" data-iface="${iface}">
+          <option value="">—</option>
+          ${[1,2,3,4,5,6,7,8].map(n => `<option value="${n}">${n}</option>`).join('')}
+        </select>
+      </div>
+      <div id="iface-instances-${sdIdx}-${iface}"></div>`;
+
+    grp.querySelector('.iface-count').addEventListener('change', function () {
+      buildInstances(sdIdx, iface, parseInt(this.value) || 0);
+      onAnyInput();
+    });
+
+    container.appendChild(grp);
+  }
+
+  function makeInstanceBlock(sdIdx, iface, i) {
+    const blk = document.createElement('div');
+    blk.className = 'instance-block';
+    blk.dataset.inst = i;
+    blk.innerHTML = `
+      <div class="instance-block-title">Instance ${i}</div>
+      <div class="form-row" style="gap:.75rem">
+        <div class="form-group" style="flex:1">
+          <label class="form-label" for="instname-${sdIdx}-${iface}-${i}">
+            Instance Name <span class="required">*</span>
+          </label>
+          <input type="text" id="instname-${sdIdx}-${iface}-${i}"
+            class="form-control instance-name"
+            data-sd="${sdIdx}" data-iface="${iface}" data-inst="${i}"
+            placeholder="e.g. eth0, usb_left, can_bus" required>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label" for="loc-${sdIdx}-${iface}-${i}">
+            Location <span class="required">*</span>
+          </label>
+          <input type="text" id="loc-${sdIdx}-${iface}-${i}"
+            class="form-control instance-loc"
+            data-sd="${sdIdx}" data-iface="${iface}" data-inst="${i}"
+            placeholder="e.g. Front panel left" required>
+        </div>
+      </div>`;
+    blk.querySelector('.instance-name').addEventListener('input', onAnyInput);
+    blk.querySelector('.instance-loc').addEventListener('input', onAnyInput);
+    return blk;
+  }
+
+  function buildInstances(sdIdx, iface, n) {
+    const container = document.getElementById(`iface-instances-${sdIdx}-${iface}`);
+    const existing = container.querySelectorAll('.instance-block');
+    // Remove extra blocks from the end when shrinking
+    [...existing].slice(n).forEach(el => el.remove());
+    // Append new blocks when growing
+    for (let i = existing.length + 1; i <= n; i++) {
+      container.appendChild(makeInstanceBlock(sdIdx, iface, i));
+    }
+  }
+
+  // ── Validation ───────────────────────────────────────────────────────────────
+  function collectErrors() {
+    const errors = [];
+    if (!filled(targetDir))      errors.push('Target directory');
+    if (!filled(clientName))     errors.push('Client full name');
+    if (!filled(clientShort))    errors.push('Client short name');
+    if (!filled(consultantName)) errors.push('Consultant name');
+    if (!filled(consultantTitle))errors.push('Consultant title');
+    if (!filled(consultantEmail))errors.push('Consultant email');
+    if (!filled(pocName))        errors.push('POC name');
+    if (!filled(pocEmail))       errors.push('POC email');
+    if (!filled(projYear))       errors.push('Assessment year');
+    if (!filled(startDate))      errors.push('Start date');
+    if (!filled(endDate))        errors.push('End date');
+    if (!filled(deviceName))     errors.push('Device name');
+    if (!filled(deviceModel))    errors.push('Device model number');
+    if (!filled(deviceSW))       errors.push('Device software version');
+
+    if (!numSubdevices.value) {
+      errors.push('Number of sub-devices');
+    } else {
+      const n = parseInt(numSubdevices.value);
+      for (let i = 1; i <= n; i++) {
+        const sdName = document.getElementById(`sd_name_${i}`);
+        if (!sdName || !sdName.value.trim()) errors.push(`Sub-Device ${i} name`);
+
+        // Check at least one interface selected
+        const checks = document.querySelectorAll(`.iface-check[data-sd="${i}"]:checked`);
+        if (checks.length === 0) errors.push(`Sub-Device ${i}: at least one interface required`);
+
+        checks.forEach(cb => {
+          const iface = cb.dataset.iface;
+          const countEl = document.getElementById(`iface-count-${i}-${iface}`);
+          if (!countEl || !countEl.value) {
+            errors.push(`Sub-Device ${i} / ${iface}: instance count required`);
+            return;
+          }
+          const cnt = parseInt(countEl.value);
+          for (let j = 1; j <= cnt; j++) {
+            const loc = document.getElementById(`loc-${i}-${iface}-${j}`);
+            const nameEl2 = document.getElementById(`instname-${i}-${iface}-${j}`);
+            if (!nameEl2 || !nameEl2.value.trim()) errors.push(`Sub-Device ${i} / ${iface} / Instance ${j}: name required`);
+            if (!loc || !loc.value.trim()) errors.push(`Sub-Device ${i} / ${iface} / Instance ${j}: location required`);
+          }
+        });
+      }
+    }
+
+    return errors;
+  }
+
+  function validateAndUpdateButton() {
+    const btn = $('createBtn');
+    const errDiv = $('validationErrors');
+    const errList = $('errorListItems');
+    const errors = collectErrors();
+
+    if (errors.length === 0) {
+      btn.disabled = false;
+      btn.classList.remove('btn-disabled');
+      hide(errDiv);
+    } else {
+      btn.disabled = true;
+      btn.classList.add('btn-disabled');
+      // Only show errors if user has started filling the form
+      if (filled(targetDir)) {
+        errList.innerHTML = errors.map(e => `<li>${e}</li>`).join('');
+        show(errDiv);
+      }
+    }
+  }
+
+  // ── Build payload ─────────────────────────────────────────────────────────
+  function buildPayload() {
+    const n = parseInt(numSubdevices.value) || 0;
+    const subdevices = [];
+
+    for (let i = 1; i <= n; i++) {
+      const sdData = { name: '', interfaces: {} };
+      const sdNameEl = document.getElementById(`sd_name_${i}`);
+      sdData.name = sdNameEl ? sdNameEl.value.trim() : '';
+
+      const checks = document.querySelectorAll(`.iface-check[data-sd="${i}"]:checked`);
+      checks.forEach(cb => {
+        const iface = cb.dataset.iface;
+        const countEl = document.getElementById(`iface-count-${i}-${iface}`);
+        const cnt = parseInt((countEl && countEl.value) || 0);
+        sdData.interfaces[iface] = [];
+        for (let j = 1; j <= cnt; j++) {
+          const nameEl = document.getElementById(`instname-${i}-${iface}-${j}`);
+          const loc    = document.getElementById(`loc-${i}-${iface}-${j}`);
+          sdData.interfaces[iface].push({
+            name:     nameEl ? nameEl.value.trim() : '',
+            location: loc    ? loc.value.trim()    : '',
+          });
+        }
+      });
+
+      subdevices.push(sdData);
+    }
+
+    return {
+      target_dir:        targetDir.value.trim(),
+      client_name:       clientName.value.trim(),
+      client_short:      clientShort.value.trim(),
+      consultant_name:   consultantName.value.trim(),
+      consultant_title:  consultantTitle.value.trim(),
+      consultant_email:  consultantEmail.value.trim(),
+      poc_name:          pocName.value.trim(),
+      poc_phone:         pocPhone.value.trim(),
+      poc_email:         pocEmail.value.trim(),
+      year:              projYear.value.trim(),
+      version:           $('projVersion').value.trim() || '1.0',
+      start_date:        startDate.value.trim(),
+      end_date:          endDate.value.trim(),
+      device:            deviceName.value.trim(),
+      device_model:      deviceModel.value.trim(),
+      device_sw_version: deviceSW.value.trim(),
+      subdevices,
+    };
+  }
+
+  // ── Submit ───────────────────────────────────────────────────────────────────
+  $('createBtn').addEventListener('click', async () => {
+    const errors = collectErrors();
+    if (errors.length > 0) return;
+
+    const btn = $('createBtn');
+    const icon = $('createBtnIcon');
+    const text = $('createBtnText');
+    btn.disabled = true;
+    btn.classList.add('btn-disabled');
+    icon.className = 'spinner';
+    icon.textContent = '';
+    text.textContent = 'Saving…';
+
+    const projectId = $('projectId').value;
+    try {
+      const res = await fetch(`/api/update_project/${projectId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload()),
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.location = `/project/${data.project_id}`;
+      } else {
+        throw new Error(data.error || 'Unknown error');
+      }
+    } catch (err) {
+      icon.className = '';
+      icon.textContent = '⚠';
+      text.textContent = 'Error — try again';
+      btn.disabled = false;
+      btn.classList.remove('btn-disabled');
+      const errDiv = $('validationErrors');
+      const errList = $('errorListItems');
+      errList.innerHTML = `<li>Server error: ${err.message}</li>`;
+      show(errDiv);
+    }
+  });
+
+  // ── Wire all inputs ──────────────────────────────────────────────────────────
+  document.getElementById('newProjectForm').addEventListener('input', onAnyInput);
+  document.getElementById('newProjectForm').addEventListener('change', onAnyInput);
+
+  // ── Pre-populate from existing project ──────────────────────────────────────
+  (function prePopulate() {
+    const p = {{ project | tojson }};
+    if (!p || !Object.keys(p).length) { onAnyInput(); return; }
+
+    // Show all sections and enable all conditionally-disabled fields upfront
+    // so that programmatic value assignment works without needing input events.
+    ['sec-client','sec-consultant','sec-poc','sec-dates','sec-device','sec-subdevices','sec-submit']
+      .forEach(id => show($(id)));
+    enable(clientShort,      $('fg-clientShort'));
+    enable(consultantTitle,  $('fg-consultantTitle'));
+    enable(consultantEmail,  $('fg-consultantEmail'));
+    enable(pocPhone,         $('fg-pocPhone'));
+    enable(pocEmail,         $('fg-pocEmail'));
+    enable(deviceModel,      $('fg-deviceModel'));
+    enable(deviceSW,         $('fg-deviceSW'));
+
+    targetDir.value        = {{ yaml_path | tojson }}.replace(/\/[^\/]+\.ya?ml$/, '');
+    clientName.value       = p.client_name    || '';
+    clientShort.value      = p.client_short   || '';
+    consultantName.value   = (p.consultant || {}).name  || '';
+    consultantTitle.value  = (p.consultant || {}).title || '';
+    consultantEmail.value  = (p.consultant || {}).email || '';
+    pocName.value          = (p.client_poc || {}).name  || '';
+    pocPhone.value         = (p.client_poc || {}).phone || '';
+    pocEmail.value         = (p.client_poc || {}).email || '';
+    projYear.value         = p.year     || new Date().getFullYear();
+    $('projVersion').value = p.version  || '1.0';
+    startDate.value        = p.start_date || '';
+    endDate.value          = p.end_date   || '';
+    deviceName.value       = p.device                  || '';
+    deviceModel.value      = p.device_model_number     || '';
+    deviceSW.value         = p.device_software_version || '';
+
+    // Subdevices
+    const sds = p.subdevices || {};
+    const sdEntries = Object.entries(sds);
+    if (sdEntries.length) {
+      numSubdevices.value = sdEntries.length;
+      buildSubdevices(sdEntries.length);
+
+      sdEntries.forEach(([sdKey, sdData], i) => {
+        const idx = i + 1;
+        const nameEl = document.getElementById(`sd_name_${idx}`);
+        if (nameEl) nameEl.value = sdData.name || sdKey;
+
+        // Show interface section — programmatic .value= doesn't fire the input event
+        show(document.getElementById(`sd-ifaces-section-${idx}`));
+
+        const ifaces = sdData.interfaces || {};
+        Object.entries(ifaces).forEach(([ifaceName, instances]) => {
+          // Check the interface checkbox and reveal its detail group
+          const cb = document.querySelector(`.iface-check[data-sd="${idx}"][data-iface="${ifaceName}"]`);
+          if (cb) {
+            cb.checked = true;
+            const label = document.getElementById(`cb-label-${idx}-${ifaceName}`);
+            if (label) label.classList.add('checked');
+            syncIfaceDetail(idx, ifaceName, true);
+          }
+
+          // Determine instance count — instances may be an object or array
+          const instEntries = Array.isArray(instances)
+            ? instances.map((v, k) => [String(k), v])
+            : Object.entries(instances || {});
+
+          // Set instance count and build rows
+          const countEl = document.getElementById(`iface-count-${idx}-${ifaceName}`);
+          if (countEl) {
+            countEl.value = instEntries.length;
+            buildInstances(idx, ifaceName, instEntries.length);
+          }
+
+          // Fill instance name + location
+          instEntries.forEach(([instKey, instData], j) => {
+            const k = j + 1;
+            const nameF = document.getElementById(`instname-${idx}-${ifaceName}-${k}`);
+            const locF  = document.getElementById(`loc-${idx}-${ifaceName}-${k}`);
+            if (nameF) nameF.value = (instData && instData.name) ? instData.name : instKey.replace(/_/g, ' ');
+            if (locF)  locF.value  = (instData || {}).location || '';
+          });
+        });
+      });
+    }
+
+    onAnyInput();
+  })();
+})();
+</script>
+{% endblock %}

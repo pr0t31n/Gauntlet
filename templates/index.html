@@ -1,0 +1,747 @@
+{% extends "base.html" %}
+
+{% block title %}Gauntlet — Project Selection{% endblock %}
+
+{% block content %}
+<div class="page-container">
+
+  <div class="title-ornament"><span>⚙</span></div>
+  <h1 class="page-title">Project Console</h1>
+  <p class="page-subtitle">Select an existing project or initiate a new assessment</p>
+
+  <div class="home-layout">
+
+    <!-- ── Left Panel: Project Selector ── -->
+    <div class="selector-panel">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-icon">⚙</span>
+          <h3>Projects</h3>
+        </div>
+        <div class="panel-body">
+          <div class="form-group">
+            <label class="form-label" for="projectSelect">Select Project</label>
+            <select class="form-control project-select" id="projectSelect">
+              <option value="">— Select a project —</option>
+              {% for pid, pdata in projects.items() %}
+              <option value="{{ pid }}">{{ pdata.name }}{% if pdata.version %}  [{{ pdata.version }}]{% endif %}</option>
+              {% endfor %}
+              <option disabled value="">──────────────────────────</option>
+              <option value="__import__">📂  Import existing YAML…</option>
+            </select>
+          </div>
+
+          {% if not projects %}
+          <div class="alert alert-info">
+            <span>ℹ</span>
+            <span>No projects found. Create your first project to get started.</span>
+          </div>
+          {% endif %}
+
+          <div class="btn-row">
+            <button
+              class="btn btn-primary btn-disabled"
+              id="loadProjectBtn"
+              disabled
+              title="Select a project first"
+              aria-disabled="true">
+              ▶ Load Project
+            </button>
+            <button
+              class="btn btn-secondary btn-disabled"
+              id="exportProjectBtn"
+              disabled
+              title="All instances must be complete to export"
+              aria-disabled="true">
+              ⬇ Export Project
+            </button>
+            <a href="{{ url_for('new_project') }}" class="btn btn-secondary" id="newOrEditProjectBtn">
+              ✦ New Project
+            </a>
+          </div>
+          <div class="btn-row" style="margin-top:.5rem">
+            <button
+              class="btn btn-warning btn-disabled"
+              id="resetProjectBtn"
+              disabled
+              title="Select a project first"
+              aria-disabled="true">
+              ↺ Reset Project
+            </button>
+            <button
+              class="btn btn-danger btn-disabled"
+              id="deleteProjectBtn"
+              disabled
+              title="Select a project first"
+              aria-disabled="true">
+              ✕ Delete Project
+            </button>
+          </div>
+          <div class="btn-row" style="margin-top:.5rem">
+            <button
+              class="btn btn-danger"
+              id="systemCleanupBtn"
+              title="Kill Responder, stop Nessus scans, revert test_direct interface">
+              ⚠ System Cleanup
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Right Panel: Project Details ── -->
+    <div class="details-panel">
+      <div class="panel" id="detailsPanel">
+        <div class="panel-header">
+          <span class="panel-icon">◈</span>
+          <h3>Project Overview</h3>
+        </div>
+        <div class="panel-body">
+
+          <!-- Instance Completion Bar (shown when project selected) -->
+          <div id="instanceProgressBlock" class="hidden" style="margin-bottom:1rem">
+            <div class="progress-label">
+              <span>Instance Completion</span>
+              <span id="detInstanceLabel2">0 / 0</span>
+            </div>
+            <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="detInstanceBar2">
+              <div class="progress-fill" id="detInstanceFill2" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- Placeholder (no project selected) -->
+          <div class="details-placeholder" id="detailsPlaceholder">
+            <span class="placeholder-gear" aria-hidden="true">⚙</span>
+            <p>Select a project from the list to view its details here.</p>
+          </div>
+
+          <!-- Project Details (revealed when project selected) -->
+          <div class="project-info" id="projectInfo" aria-live="polite">
+
+            <!-- Header -->
+            <div class="info-header">
+              <div class="client-name" id="detClientName">—</div>
+              <div class="device-name" id="detDeviceName">—</div>
+            </div>
+
+            <!-- Info Grid -->
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">POC Name</span>
+                <span class="info-value" id="detPocName">—</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">POC Phone</span>
+                <span class="info-value" id="detPocPhone">—</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">POC Email</span>
+                <span class="info-value" id="detPocEmail">—</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Consultant</span>
+                <span class="info-value" id="detConsultantName">—</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Consultant Title</span>
+                <span class="info-value" id="detConsultantTitle">—</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Assessment Period</span>
+                <span class="info-value" id="detDates">—</span>
+              </div>
+            </div>
+
+            <div class="info-divider" aria-hidden="true"></div>
+
+            <!-- Module Progress Bar -->
+            <div class="progress-label">
+              <span>Module Progress</span>
+              <span id="detProgressLabel">0 / 0</span>
+            </div>
+            <div class="progress-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="detProgressBar">
+              <div class="progress-fill" id="detProgressFill" style="width: 0%"></div>
+            </div>
+
+            <!-- Module Outline -->
+            <div class="form-section-title" style="margin-top:.5rem">
+              Module Outline
+            </div>
+            <div class="module-outline" id="detModuleOutline">
+              <!-- Populated by JS -->
+            </div>
+
+          </div><!-- /project-info -->
+
+          <!-- Loading indicator -->
+          <div class="details-placeholder hidden" id="detailsLoading">
+            <span class="spinner" style="width:32px;height:32px;border-width:3px"></span>
+            <p style="margin-top:1rem">Loading project data…</p>
+          </div>
+
+        </div><!-- /panel-body -->
+      </div><!-- /panel -->
+    </div><!-- /details-panel -->
+
+  </div><!-- /home-layout -->
+</div>
+
+<!-- ░░ Import YAML Modal ░░ -->
+<div class="modal-backdrop" id="importYamlModal" hidden role="dialog" aria-modal="true" aria-labelledby="importYamlTitle">
+  <div class="modal-panel" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-gear" aria-hidden="true">📂</span>
+      <h3 class="modal-title" id="importYamlTitle">Import Existing Project</h3>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:1rem;line-height:1.5;color:var(--text-secondary)">
+        Enter the absolute filesystem path to an existing project YAML file.
+        The project will be registered in Gauntlet without moving or copying any files.
+      </p>
+      <div class="form-group">
+        <label class="form-label" for="importYamlPath">YAML File Path</label>
+        <input type="text" id="importYamlPath" class="form-control"
+               placeholder="/path/to/project/client_device.yaml"
+               autocomplete="off" spellcheck="false"
+               style="font-family:var(--font-mono);font-size:.88rem">
+      </div>
+      <div id="importYamlError" class="alert alert-danger hidden" style="margin-top:.5rem;padding:.4rem .7rem;font-size:.82rem">
+        <span id="importYamlErrorMsg">Error.</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" id="importYamlCancelBtn">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="importYamlConfirmBtn">Import Project</button>
+    </div>
+  </div>
+</div>
+
+<!-- ░░ Danger Confirmation Modal ░░ -->
+<div class="modal-backdrop" id="dangerModal" hidden role="dialog" aria-modal="true" aria-labelledby="dangerModalTitle">
+  <div class="modal-panel" style="max-width:440px">
+    <div class="modal-header" id="dangerModalHeader">
+      <span class="modal-gear" aria-hidden="true" id="dangerModalIcon">⚠</span>
+      <h3 class="modal-title" id="dangerModalTitle">Confirm Action</h3>
+    </div>
+    <div class="modal-body">
+      <p id="dangerModalMsg" style="margin-bottom:1rem;line-height:1.5"></p>
+      <div class="form-group">
+        <label class="form-label" id="dangerModalInputLabel" for="dangerModalInput"></label>
+        <input type="text" id="dangerModalInput" class="form-control"
+               placeholder="" autocomplete="off" spellcheck="false"
+               style="font-family:monospace;letter-spacing:.1em;font-size:1.1rem">
+      </div>
+      <div id="dangerModalError" class="alert alert-danger hidden" style="margin-top:.5rem;padding:.4rem .7rem;font-size:.8rem">
+        <span>Incorrect confirmation text. Try again.</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary btn-sm" id="dangerModalCancelBtn">Cancel</button>
+      <button class="btn btn-danger btn-sm" id="dangerModalConfirmBtn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── System Cleanup Modal ── -->
+<div class="modal-backdrop" id="cleanupModal" hidden role="dialog" aria-modal="true" aria-labelledby="cleanupModalTitle">
+  <div class="modal-panel" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-gear" id="cleanupModalIcon">⚠</span>
+      <h3 class="modal-title" id="cleanupModalTitle">System Cleanup</h3>
+    </div>
+    <div class="modal-body" id="cleanupModalBody">
+      <p>This will:</p>
+      <ul style="margin:.5rem 0 .5rem 1.2rem;line-height:1.8">
+        <li>Kill any active Gearbox instance</li>
+        <li>Kill any active Responder instance</li>
+        <li>Stop any running Nessus scans started by Gearbox</li>
+        <li>Revert the <code>test_direct</code> interface to DHCP default</li>
+      </ul>
+      <p>Proceed?</p>
+    </div>
+    <div class="modal-footer" id="cleanupModalFooter">
+      <button class="btn btn-secondary btn-sm" id="cleanupModalCancelBtn">Cancel</button>
+      <button class="btn btn-danger btn-sm" id="cleanupModalConfirmBtn">Run Cleanup</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Inline: home-page project selector behavior
+(function() {
+  const select  = document.getElementById('projectSelect');
+  const loadBtn = document.getElementById('loadProjectBtn');
+  const placeholder        = document.getElementById('detailsPlaceholder');
+  const loading            = document.getElementById('detailsLoading');
+  const info               = document.getElementById('projectInfo');
+  const exportBtn          = document.getElementById('exportProjectBtn');
+  const resetBtn           = document.getElementById('resetProjectBtn');
+  const deleteBtn          = document.getElementById('deleteProjectBtn');
+  const instanceProgBlock  = document.getElementById('instanceProgressBlock');
+  const newOrEditBtn       = document.getElementById('newOrEditProjectBtn');
+
+  // field refs
+  const f = {
+    clientName:      document.getElementById('detClientName'),
+    deviceName:      document.getElementById('detDeviceName'),
+    pocName:         document.getElementById('detPocName'),
+    pocPhone:        document.getElementById('detPocPhone'),
+    pocEmail:        document.getElementById('detPocEmail'),
+    consultantName:  document.getElementById('detConsultantName'),
+    consultantTitle: document.getElementById('detConsultantTitle'),
+    dates:           document.getElementById('detDates'),
+    progressLabel:   document.getElementById('detProgressLabel'),
+    progressFill:    document.getElementById('detProgressFill'),
+    progressBar:     document.getElementById('detProgressBar'),
+    instanceLabel:   document.getElementById('detInstanceLabel2'),
+    instanceFill:    document.getElementById('detInstanceFill2'),
+    instanceBar:     document.getElementById('detInstanceBar2'),
+    outline:         document.getElementById('detModuleOutline'),
+  };
+
+  let selectedId = '';
+  let _projectYaml = {};
+
+  function show(el)  { el.classList.remove('hidden'); }
+  function hide(el)  { el.classList.add('hidden'); }
+
+  function enableLoad(pid) {
+    loadBtn.disabled = false;
+    loadBtn.classList.remove('btn-disabled');
+    loadBtn.setAttribute('aria-disabled', 'false');
+    loadBtn.onclick = () => { window.location = `/project/${pid}`; };
+  }
+
+  function disableLoad() {
+    loadBtn.disabled = true;
+    loadBtn.classList.add('btn-disabled');
+    loadBtn.setAttribute('aria-disabled', 'true');
+    loadBtn.onclick = null;
+  }
+
+  function enableBtn(btn) {
+    btn.disabled = false;
+    btn.classList.remove('btn-disabled');
+    btn.setAttribute('aria-disabled', 'false');
+  }
+
+  function disableBtn(btn) {
+    btn.disabled = true;
+    btn.classList.add('btn-disabled');
+    btn.setAttribute('aria-disabled', 'true');
+  }
+
+  function val(v) { return v || '—'; }
+
+  function buildOutline(yamlData, moduleStatus) {
+    const sd = yamlData.subdevices || {};
+    let html = `<div class="tree-device">⚙ ${val(yamlData.device)}</div>`;
+
+    Object.entries(sd).forEach(([sdKey, sdData]) => {
+      if (!sdData) return;
+      html += `<div class="tree-subdevice">`;
+      html += `<div class="tree-subdevice-name">◈ ${val(sdData.name)}</div>`;
+
+      const ifaces = sdData.interfaces || {};
+      Object.entries(ifaces).forEach(([ifaceName, instances]) => {
+        if (!instances) return;
+        html += `<div class="tree-interface">`;
+        html += `<div class="tree-interface-name">⬡ ${ifaceName}</div>`;
+
+        Object.entries(instances).forEach(([instKey, instData]) => {
+          const moduleKey = `${sdKey}.${ifaceName}.${instKey}`;
+          const done = !!(moduleStatus && moduleStatus[moduleKey]);
+          const loc  = (instData && instData.location) ? instData.location : 'No location';
+          const cls  = done ? 'complete' : '';
+          html += `<div class="tree-instance">
+            <span class="tree-instance-marker ${cls}">${done ? '✓' : ''}</span>
+            <span class="tree-instance-text ${cls}">${instKey.replace('_',' ')} — ${loc}</span>
+          </div>`;
+        });
+
+        html += `</div>`; // tree-interface
+      });
+
+      html += `</div>`; // tree-subdevice
+    });
+
+    return html || '<em style="color:var(--text-muted)">No interfaces defined</em>';
+  }
+
+  async function loadProject(pid) {
+    hide(placeholder);
+    hide(info);
+    hide(instanceProgBlock);
+    info.classList.remove('visible');
+    show(loading);
+
+    try {
+      const res  = await fetch(`/api/project/${pid}`);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      const y  = data.yaml || {};
+      const ms = data.status || {};
+      const total     = data.total_modules || 0;
+      const completed = data.completed_modules || 0;
+      const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      const totalInst     = data.total_instances || 0;
+      const completedInst = data.completed_instances_count || 0;
+      const pctInst = totalInst > 0 ? Math.round((completedInst / totalInst) * 100) : 0;
+      const allDone = totalInst > 0 && completedInst >= totalInst;
+
+      _projectYaml = y;
+
+      // Populate fields
+      const clientShort = y.client_short ? ` (${y.client_short})` : '';
+      f.clientName.textContent      = `${val(y.client_name)}${clientShort}`;
+      f.deviceName.textContent      = `${val(y.device)} ${y.device_model_number ? '· ' + y.device_model_number : ''}`;
+      f.pocName.textContent         = val((y.client_poc || {}).name);
+      f.pocPhone.textContent        = val((y.client_poc || {}).phone);
+      f.pocEmail.innerHTML          = (y.client_poc || {}).email
+        ? `<a href="mailto:${y.client_poc.email}">${y.client_poc.email}</a>` : '—';
+      f.consultantName.textContent  = val((y.consultant || {}).name);
+      f.consultantTitle.textContent = val((y.consultant || {}).title);
+
+      const sd = y.start_date || '';
+      const ed = y.end_date   || '';
+      f.dates.textContent = (sd && ed) ? `${sd} → ${ed}` : val(sd || ed);
+
+      f.instanceLabel.textContent = `${completedInst} / ${totalInst}`;
+      f.instanceBar.setAttribute('aria-valuenow', pctInst);
+      f.instanceFill.style.width  = `${pctInst}%`;
+
+      f.progressLabel.textContent = `${completed} / ${total}`;
+      f.progressBar.setAttribute('aria-valuenow', pct);
+      f.progressFill.style.width  = `${pct}%`;
+
+      f.outline.innerHTML = buildOutline(y, ms);
+
+      hide(loading);
+      show(instanceProgBlock);
+      show(info);
+      info.classList.add('visible');
+      enableLoad(pid);
+
+      // Export: only enabled when all instances complete
+      if (allDone) {
+        enableBtn(exportBtn);
+        exportBtn.title = 'Download zip of complete project';
+        exportBtn.onclick = () => exportProject(pid, y);
+      } else {
+        disableBtn(exportBtn);
+        exportBtn.title = `${completedInst}/${totalInst} instances complete — finish all to export`;
+        exportBtn.onclick = null;
+      }
+      // Reset + Delete always enabled when a project is selected
+      enableBtn(resetBtn);
+      resetBtn.title = 'Delete all output files (keeps project YAML)';
+      resetBtn.onclick = () => showDangerModal('reset', pid);
+      enableBtn(deleteBtn);
+      deleteBtn.title = 'Permanently remove this project';
+      deleteBtn.onclick = () => showDangerModal('delete', pid);
+
+    } catch (err) {
+      hide(loading);
+      show(placeholder);
+      placeholder.querySelector('p').textContent = `Error loading project: ${err.message}`;
+    }
+  }
+
+  function exportProject(pid, y) {
+    const cs = (y.client_short || 'client').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+    const dv = (y.device || 'device').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+    const dt = new Date().toISOString().replace(/[T:]/g, '-').slice(0, 16).replace(/[-:]/g, '');
+    // Server auto-names the zip; we just trigger the download
+    const a = document.createElement('a');
+    a.href = `/api/export_zip/${pid}`;
+    a.download = `gearbox-${cs}-${dv}-${dt}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  // ── Import YAML Modal ────────────────────────────────────────────────────
+  const importModal      = document.getElementById('importYamlModal');
+  const importPathInput  = document.getElementById('importYamlPath');
+  const importError      = document.getElementById('importYamlError');
+  const importErrorMsg   = document.getElementById('importYamlErrorMsg');
+  const importCancelBtn  = document.getElementById('importYamlCancelBtn');
+  const importConfirmBtn = document.getElementById('importYamlConfirmBtn');
+
+  function openImportModal() {
+    importPathInput.value = '';
+    importError.classList.add('hidden');
+    importModal.hidden = false;
+    setTimeout(() => importPathInput.focus(), 80);
+  }
+
+  function closeImportModal() {
+    importModal.hidden = true;
+    importPathInput.value = '';
+    importError.classList.add('hidden');
+  }
+
+  importCancelBtn.addEventListener('click', closeImportModal);
+  importModal.addEventListener('click', e => { if (e.target === importModal) closeImportModal(); });
+  importPathInput.addEventListener('keydown', e => { if (e.key === 'Enter') importConfirmBtn.click(); });
+
+  importConfirmBtn.addEventListener('click', async () => {
+    const yamlPath = importPathInput.value.trim();
+    if (!yamlPath) {
+      importErrorMsg.textContent = 'Please enter a file path.';
+      importError.classList.remove('hidden');
+      importPathInput.focus();
+      return;
+    }
+
+    importConfirmBtn.disabled = true;
+    importConfirmBtn.textContent = 'Importing…';
+    importError.classList.add('hidden');
+
+    try {
+      const res  = await fetch('/api/import_yaml_path', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ yaml_path: yamlPath }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || res.statusText);
+
+      const { project_id, name, already_existed, version } = data;
+
+      // Add option to select if not already present
+      let opt = select.querySelector(`option[value="${project_id}"]`);
+      if (!opt) {
+        opt = document.createElement('option');
+        opt.value = project_id;
+        opt.textContent = name + (version ? `  [${version}]` : '');
+        // Insert before the divider (the disabled separator option)
+        const divider = select.querySelector('option[disabled]');
+        select.insertBefore(opt, divider || null);
+      }
+
+      closeImportModal();
+      select.value = project_id;
+      select.dispatchEvent(new Event('change'));
+
+    } catch (err) {
+      importErrorMsg.textContent = err.message;
+      importError.classList.remove('hidden');
+    } finally {
+      importConfirmBtn.disabled = false;
+      importConfirmBtn.textContent = 'Import Project';
+    }
+  });
+
+  // ── Danger Modal ─────────────────────────────────────────────────────────
+  const dangerModal    = document.getElementById('dangerModal');
+  const dangerIcon     = document.getElementById('dangerModalIcon');
+  const dangerTitle    = document.getElementById('dangerModalTitle');
+  const dangerMsg      = document.getElementById('dangerModalMsg');
+  const dangerInputLbl = document.getElementById('dangerModalInputLabel');
+  const dangerInput    = document.getElementById('dangerModalInput');
+  const dangerError    = document.getElementById('dangerModalError');
+  const dangerCancelBtn  = document.getElementById('dangerModalCancelBtn');
+  const dangerConfirmBtn = document.getElementById('dangerModalConfirmBtn');
+
+  let _dangerAction = null;
+
+  function showDangerModal(action, pid) {
+    _dangerAction = { action, pid };
+    dangerError.classList.add('hidden');
+    dangerInput.value = '';
+
+    if (action === 'reset') {
+      dangerIcon.textContent = '↺';
+      dangerTitle.textContent = 'Reset Project';
+      dangerMsg.innerHTML =
+        '<strong style="color:var(--accent)">This will permanently delete all output files</strong> '
+        + 'in the project directory (logs, scan results, databases), but will keep the project YAML configuration.<br><br>'
+        + 'Type <code style="font-size:1rem;letter-spacing:.1em">RESET</code> to confirm:';
+      dangerInputLbl.textContent = 'Confirmation';
+      dangerInput.placeholder = 'Type RESET to confirm';
+      dangerConfirmBtn.textContent = 'Reset Project';
+    } else {
+      dangerIcon.textContent = '✕';
+      dangerTitle.textContent = 'Delete Project';
+      dangerMsg.innerHTML =
+        '<strong style="color:var(--danger,#e05)">This will permanently delete the entire project</strong> '
+        + '— all output files AND the project entry will be removed. This cannot be undone.<br><br>'
+        + 'Type <code style="font-size:1rem;letter-spacing:.1em">DELETE</code> to confirm:';
+      dangerInputLbl.textContent = 'Confirmation';
+      dangerInput.placeholder = 'Type DELETE to confirm';
+      dangerConfirmBtn.textContent = 'Delete Project';
+    }
+
+    dangerModal.hidden = false;
+    setTimeout(() => dangerInput.focus(), 80);
+  }
+
+  function closeDangerModal() {
+    dangerModal.hidden = true;
+    _dangerAction = null;
+    dangerInput.value = '';
+    dangerError.classList.add('hidden');
+  }
+
+  dangerCancelBtn.addEventListener('click', closeDangerModal);
+  dangerModal.addEventListener('click', e => { if (e.target === dangerModal) closeDangerModal(); });
+  dangerInput.addEventListener('keydown', e => { if (e.key === 'Enter') dangerConfirmBtn.click(); });
+
+  dangerConfirmBtn.addEventListener('click', async () => {
+    if (!_dangerAction) return;
+    const { action, pid } = _dangerAction;
+    const expected = action === 'reset' ? 'RESET' : 'DELETE';
+    if (dangerInput.value.trim() !== expected) {
+      dangerError.classList.remove('hidden');
+      dangerInput.focus();
+      return;
+    }
+
+    dangerConfirmBtn.disabled = true;
+    dangerConfirmBtn.textContent = 'Working…';
+    try {
+      const url    = action === 'reset' ? `/api/reset_project/${pid}` : `/api/delete_project/${pid}`;
+      const method = 'DELETE';
+      const res    = await fetch(url, { method });
+      const data   = await res.json();
+      if (!res.ok) throw new Error(data.error || res.statusText);
+
+      closeDangerModal();
+      if (action === 'delete') {
+        // Remove option from select and reload page
+        const opt = select.querySelector(`option[value="${pid}"]`);
+        if (opt) opt.remove();
+        select.value = '';
+        select.dispatchEvent(new Event('change'));
+        // Hard reload to refresh project list
+        window.location.reload();
+      } else {
+        // Reset: just reload the project details
+        loadProject(pid);
+      }
+    } catch (err) {
+      dangerConfirmBtn.disabled = false;
+      dangerConfirmBtn.textContent = action === 'reset' ? 'Reset Project' : 'Delete Project';
+      dangerError.querySelector('span').textContent = `Error: ${err.message}`;
+      dangerError.classList.remove('hidden');
+    }
+  });
+
+  select.addEventListener('change', () => {
+    selectedId = select.value;
+    if (selectedId === '__import__') {
+      select.value = '';  // deselect the meta-option immediately
+      selectedId = '';
+      openImportModal();
+      return;
+    }
+    if (selectedId) {
+      loadProject(selectedId);
+      newOrEditBtn.href = `/edit_project/${selectedId}`;
+      newOrEditBtn.textContent = '✎ Edit Project';
+    } else {
+      disableLoad();
+      disableBtn(exportBtn);
+      disableBtn(resetBtn);
+      disableBtn(deleteBtn);
+      exportBtn.onclick = null;
+      resetBtn.onclick  = null;
+      deleteBtn.onclick = null;
+      hide(info);
+      hide(instanceProgBlock);
+      info.classList.remove('visible');
+      hide(loading);
+      show(placeholder);
+      placeholder.querySelector('p').textContent = 'Select a project from the list to view its details here.';
+      newOrEditBtn.href = "{{ url_for('new_project') }}";
+      newOrEditBtn.textContent = '✦ New Project';
+    }
+  });
+})();
+
+// ── System Cleanup ────────────────────────────────────────────────────────────
+(function () {
+  const cleanupBtn     = document.getElementById('systemCleanupBtn');
+  const modal          = document.getElementById('cleanupModal');
+  const cancelBtn      = document.getElementById('cleanupModalCancelBtn');
+  const confirmBtn     = document.getElementById('cleanupModalConfirmBtn');
+  const modalBody      = document.getElementById('cleanupModalBody');
+  const modalFooter    = document.getElementById('cleanupModalFooter');
+  const modalIcon      = document.getElementById('cleanupModalIcon');
+
+  function openModal() {
+    // Reset to confirmation state
+    modalIcon.textContent = '⚠';
+    modalBody.innerHTML = `
+      <p>This will:</p>
+      <ul style="margin:.5rem 0 .5rem 1.2rem;line-height:1.8">
+        <li>Kill any active Gearbox instance</li>
+        <li>Kill any active Responder instance</li>
+        <li>Stop any running Nessus scans started by Gearbox</li>
+        <li>Revert the <code>test_direct</code> interface to DHCP default</li>
+      </ul>
+      <p>Proceed?</p>`;
+    cancelBtn.style.display = '';
+    confirmBtn.style.display = '';
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = 'Run Cleanup';
+    modal.hidden = false;
+  }
+
+  function closeModal() { modal.hidden = true; }
+
+  cleanupBtn.addEventListener('click', openModal);
+  cancelBtn.addEventListener('click', closeModal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+  confirmBtn.addEventListener('click', async () => {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Running…';
+    cancelBtn.style.display = 'none';
+    modalIcon.textContent = '⟳';
+    modalBody.innerHTML = '<p>Running system cleanup — please wait…</p>';
+
+    try {
+      const res  = await fetch('/api/system_cleanup', { method: 'POST' });
+      const data = await res.json();
+
+      const statusIcon = data.overall_status === 'ok' ? '✓' : '⚠';
+      modalIcon.textContent = statusIcon;
+
+      // Build result summary
+      const sections = ['gearbox', 'responder', 'nessus', 'test_direct'];
+      const labels   = { gearbox: 'Gearbox', responder: 'Responder', nessus: 'Nessus Scans', test_direct: 'test_direct Interface' };
+      let html = '';
+      for (const key of sections) {
+        const r = data[key];
+        if (!r) continue;
+        const st    = r.status || '?';
+        const color = st === 'ok' ? '#4caf50' : st === 'skipped' ? '#888' : '#e07b54';
+        html += `<div style="margin:.4rem 0"><strong>${labels[key]}</strong>: <span style="color:${color}">${st}</span>`;
+        if (r.note)   html += ` — ${r.note}`;
+        if (r.steps  && r.steps.length)   html += '<ul style="margin:.2rem 0 0 1rem">' + r.steps.map(s => `<li>✓ ${s}</li>`).join('') + '</ul>';
+        if (r.killed && r.killed.length)  html += '<ul style="margin:.2rem 0 0 1rem">' + r.killed.map(p => `<li>✓ killed pid ${p}</li>`).join('') + '</ul>';
+        if (r.stopped&& r.stopped.length) html += '<ul style="margin:.2rem 0 0 1rem">' + r.stopped.map(s => `<li>✓ stopped "${s.name}"</li>`).join('') + '</ul>';
+        if (r.errors && r.errors.length)  html += '<ul style="margin:.2rem 0 0 1rem;color:#e07b54">' + r.errors.map(e => `<li>✗ ${e}</li>`).join('') + '</ul>';
+        html += '</div>';
+      }
+      modalBody.innerHTML = html || '<p>Cleanup complete.</p>';
+    } catch (err) {
+      modalIcon.textContent = '✗';
+      modalBody.innerHTML = `<p style="color:#e07b54">Error: ${err.message}</p>`;
+    }
+
+    confirmBtn.textContent = 'Close';
+    confirmBtn.disabled = false;
+    confirmBtn.onclick = closeModal;
+    cancelBtn.style.display = 'none';
+  });
+})();
+</script>
+{% endblock %}

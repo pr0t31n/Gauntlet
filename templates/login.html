@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-palette="tuxedo" data-mode="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Gauntlet</title>
+  <script>
+    (function(){
+      var PALETTES=['forge','frigid','futuristic','tuxedo','bloom','retro','prism',
+                   'jarvis','jarhead','speakeasy','hogwarts','rivendell','coruscant',
+                   'meridian','alabaster','noir','oldglory','alchemist','doom','lcars'];
+      try {
+        var p=localStorage.getItem('gauntlet-palette');
+        var m=localStorage.getItem('gauntlet-mode');
+        var h=document.documentElement;
+        if(p&&PALETTES.indexOf(p)!==-1)h.setAttribute('data-palette',p);
+        if(m==='light'||m==='dark')h.setAttribute('data-mode',m);
+      }catch(e){}
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    html, body { height: 100%; margin: 0; }
+    .auth-page {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-primary, #0d0d0d);
+      padding: 1.5rem;
+    }
+    .auth-card {
+      width: 100%;
+      max-width: 380px;
+      background: var(--bg-panel, #f2f2f2);
+      border: 1px solid var(--border-mid, #333);
+      border-radius: 8px;
+      padding: 2.5rem 2rem 2rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,.45);
+    }
+    .auth-logo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: .6rem;
+      margin-bottom: 2rem;
+    }
+    .auth-logo svg { width: 56px; height: 56px; color: var(--accent-gold, #c8921f); }
+    .auth-logo-title {
+      font-family: var(--font-display, 'Cinzel', serif);
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: .12em;
+      color: var(--text-primary, #e8e8e8);
+    }
+    .auth-logo-sub {
+      font-size: .75rem;
+      color: var(--text-muted, #888);
+      letter-spacing: .08em;
+    }
+    .auth-alert {
+      background: rgba(200,30,30,.15);
+      border: 1px solid rgba(200,30,30,.4);
+      border-radius: 4px;
+      color: #ff7070;
+      font-size: .85rem;
+      padding: .6rem .9rem;
+      margin-bottom: 1.25rem;
+    }
+    .auth-field { margin-bottom: 1.1rem; }
+    .auth-field label {
+      display: block;
+      font-size: .78rem;
+      letter-spacing: .06em;
+      color: var(--text-muted, #888);
+      margin-bottom: .35rem;
+    }
+    .auth-field input {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--bg-primary, #0d0d0d);
+      border: 1px solid var(--border-mid, #333);
+      border-radius: 4px;
+      color: var(--text-primary, #e8e8e8);
+      font-size: .95rem;
+      padding: .55rem .75rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .auth-field input:focus { border-color: var(--accent-gold, #c8921f); }
+    .auth-submit {
+      width: 100%;
+      margin-top: .5rem;
+      padding: .65rem;
+      background: var(--accent-gold, #c8921f);
+      border: none;
+      border-radius: 4px;
+      color: var(--bg-base, #fff);
+      font-family: var(--font-display, 'Cinzel', serif);
+      font-size: .9rem;
+      font-weight: 600;
+      letter-spacing: .08em;
+      cursor: pointer;
+      transition: opacity .15s;
+    }
+    .auth-submit:hover { opacity: .85; }
+  </style>
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg viewBox="0 0 88 88" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="18" y="24" width="52" height="52" rx="4" fill="currentColor" opacity=".12" stroke="currentColor" stroke-width="2.5"/>
+        <rect x="28" y="34" width="32" height="20" rx="2" fill="currentColor" opacity=".15" stroke="currentColor" stroke-width="1.2"/>
+        <text font-family="monospace" font-size="8.5" fill="currentColor" opacity=".7" x="44" y="46" text-anchor="middle">GNTLT</text>
+        <text font-family="monospace" font-size="6.5" fill="currentColor" opacity=".45" x="44" y="55" text-anchor="middle">v1.0</text>
+        <path d="M18 31 A7 7 0 0 1 25 24" stroke="currentColor" stroke-width="1.8" fill="none" opacity=".45"/>
+        <rect x="6"  y="31" width="12" height="5" rx="1.2" fill="currentColor" opacity=".8"/>
+        <rect x="6"  y="41" width="12" height="5" rx="1.2" fill="currentColor" opacity=".8"/>
+        <rect x="6"  y="51" width="12" height="5" rx="1.2" fill="currentColor" opacity=".8"/>
+        <rect x="6"  y="61" width="12" height="5" rx="1.2" fill="currentColor" opacity=".8"/>
+        <rect x="70" y="31" width="12" height="5" rx="1.2" fill="currentColor" opacity=".8"/>
+        <rect x="70" y="41" width="12" height="5" rx="1.2" fill="currentColor" opacity=".8"/>
+        <rect x="70" y="51" width="12" height="5" rx="1.2" fill="currentColor" opacity=".8"/>
+        <rect x="70" y="61" width="12" height="5" rx="1.2" fill="currentColor" opacity=".8"/>
+        <rect x="31" y="6"  width="5" height="18" rx="1.2" fill="currentColor" opacity=".8"/>
+        <rect x="41" y="6"  width="5" height="18" rx="1.2" fill="currentColor" opacity=".8"/>
+        <rect x="51" y="6"  width="5" height="18" rx="1.2" fill="currentColor" opacity=".8"/>
+        <rect x="31" y="76" width="5" height="8"  rx="1.2" fill="currentColor" opacity=".8"/>
+        <rect x="41" y="76" width="5" height="8"  rx="1.2" fill="currentColor" opacity=".8"/>
+        <rect x="51" y="76" width="5" height="8"  rx="1.2" fill="currentColor" opacity=".8"/>
+      </svg>
+      <span class="auth-logo-title">GAUNTLET</span>
+      <span class="auth-logo-sub">DEVICE SECURITY ASSESSMENT</span>
+    </div>
+
+    {% if error %}
+    <div class="auth-alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/login" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="auth-field">
+        <label for="username">USERNAME</label>
+        <input type="text" id="username" name="username" autocomplete="username"
+               value="{{ username or '' }}" required autofocus>
+      </div>
+      <div class="auth-field">
+        <label for="password">PASSWORD</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="auth-submit">AUTHENTICATE</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>
