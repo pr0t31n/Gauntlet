@@ -317,7 +317,7 @@ def phase_service(os_id: str, dry_run: bool) -> None:
                 run(["systemctl", "enable", "pr0t31n-gauntlet"], dry_run=dry_run)
                 success(f"Systemd service installed: {service_path}")
                 info("Start with:  systemctl start pr0t31n-gauntlet")
-                info("Gauntlet will be available on port 5000.")
+                info("Gauntlet will be available on port 5700.")
             except OSError as exc:
                 error(f"Failed to write service file: {exc}")
         else:
@@ -332,7 +332,7 @@ def phase_service(os_id: str, dry_run: bool) -> None:
                 plist_path.write_text(LAUNCHD_PLIST)
                 run(["launchctl", "load", str(plist_path)], dry_run=dry_run)
                 success(f"Launchd plist installed: {plist_path}")
-                info("Gauntlet will start automatically on boot and is available on port 5000.")
+                info("Gauntlet will start automatically on boot and is available on port 5700.")
             except OSError as exc:
                 error(f"Failed to write plist: {exc}")
         else:
@@ -489,7 +489,7 @@ def main() -> None:
 
     print()
     cprint("  Gauntlet installation complete.", GREEN, bold=True)
-    cprint("  Access the web interface at: http://localhost:5000\n", CYAN)
+    cprint("  Access the web interface at: http://localhost:5700\n", CYAN)
 
 
 if __name__ == "__main__":

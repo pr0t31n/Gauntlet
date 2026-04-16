@@ -6325,7 +6325,7 @@ def change_password():
 
 if __name__ == '__main__':
     print(f"Gauntlet v{VERSION} — Hardware Security Assessment Platform")
-    print("Listening on https://0.0.0.0:5000")
-    app.config['SERVER_PORT'] = 5000
-    socketio.run(app, debug=False, host='0.0.0.0', port=5000,
+    print("Listening on https://0.0.0.0:5700")
+    app.config['SERVER_PORT'] = 5700
+    socketio.run(app, debug=False, host='0.0.0.0', port=5700,
                  allow_unsafe_werkzeug=True, ssl_context=_auth.make_ssl_context())
