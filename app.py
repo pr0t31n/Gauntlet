@@ -3,7 +3,7 @@ Aether Engineering Suite — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.1.2"
+VERSION = "1.1.3"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -6271,6 +6271,49 @@ def logout():
 def nexus_status():
     """Unauthenticated status probe for the Nexus hub."""
     return jsonify({"app": "gauntlet", "tool": "gauntlet", "hostname": socket.gethostname(), "scanning": bool(_active_procs), "version": VERSION})
+
+
+@app.route('/api/arbiter-projects')
+def api_arbiter_projects():
+    """Return Gauntlet/Gearbox projects as normalized project records for Arbiter."""
+    raw = load_projects()
+    result = []
+    for pid, proj in raw.get("projects", {}).items():
+        # Derive client_name from yaml_path: …/clients/<client_short>/<year>/gearbox/…
+        yaml_path = proj.get("yaml_path", "")
+        client_name = proj.get("name", pid)
+        project_dir = ""
+        if yaml_path:
+            try:
+                p = Path(yaml_path)
+                project_dir = str(p.parent)
+                parts = p.parts
+                clients_idx = next((i for i, x in enumerate(parts) if x == "clients"), None)
+                if clients_idx is not None and clients_idx + 1 < len(parts):
+                    client_name = parts[clients_idx + 1]
+            except Exception:
+                pass
+        # Try to read client_short from the yaml
+        try:
+            if yaml_path and os.path.exists(yaml_path):
+                _y = load_yaml(yaml_path)
+                if _y.get("client_short"):
+                    client_name = _y["client_short"]
+        except Exception:
+            pass
+        status = "running" if pid in _active_procs else "idle"
+        result.append({
+            "id":           pid,
+            "name":         proj.get("name", pid),
+            "client_name":  client_name,
+            "tool":         "gearbox",
+            "project_dir":  project_dir,
+            "status":       status,
+            "finding_count": 0,
+            "has_findings": False,
+            "created":      proj.get("created", ""),
+        })
+    return jsonify(result)
 
 
 @app.route('/auth/change-password', methods=['GET', 'POST'])
