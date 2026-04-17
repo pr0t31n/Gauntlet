@@ -3,7 +3,7 @@ Aether Engineering Suite — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -6270,7 +6270,7 @@ def logout():
 @app.route('/api/nexus-status')
 def nexus_status():
     """Unauthenticated status probe for the Nexus hub."""
-    return jsonify({"app": "gauntlet", "scanning": bool(_active_procs), "version": VERSION})
+    return jsonify({"app": "gauntlet", "tool": "gauntlet", "hostname": socket.gethostname(), "scanning": bool(_active_procs), "version": VERSION})
 
 
 @app.route('/auth/change-password', methods=['GET', 'POST'])
