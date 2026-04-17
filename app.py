@@ -3,7 +3,7 @@ Aether Engineering Suite — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.1.3"
+VERSION = "1.2.0"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -692,6 +692,11 @@ _LOG_FILES = {
 }
 
 _project_dir_cache: dict[str, str] = {}  # project_id -> dir path (TTL-free cache)
+
+# Job queue — execute-project requests that arrive while a scan is running
+_job_queue: list = []
+_queue_lock = threading.Lock()
+_QUEUE_FILE = os.path.join(_BASE_DIR, "execute_queue.json")
 
 def _project_dir_for(project_id: str) -> str | None:
     """Return the project output directory path, cached to avoid repeated disk reads."""
@@ -6105,6 +6110,7 @@ def _stdout_reader(proc: subprocess.Popen, project_id: str, answer_q: queue.Queu
     _owner_sid.pop(project_id, None)
     _pending_prompts.pop(project_id, None)
     _active_module.pop(project_id, None)
+    threading.Thread(target=_dequeue_next, daemon=True).start()
 
 
 def _stderr_reader(proc: subprocess.Popen, project_id: str):
@@ -6364,9 +6370,175 @@ def change_password():
     return render_template('change_password.html', force=force, csrf_token=_auth.generate_csrf())
 
 
+# ---------------------------------------------------------------------------
+# Job queue helpers
+# ---------------------------------------------------------------------------
+
+def _load_execute_queue() -> None:
+    global _job_queue
+    try:
+        if os.path.exists(_QUEUE_FILE):
+            with open(_QUEUE_FILE) as _f:
+                _job_queue = json.load(_f)
+    except Exception:
+        _job_queue = []
+
+
+def _save_execute_queue() -> None:
+    try:
+        with open(_QUEUE_FILE, "w") as _f:
+            json.dump(_job_queue, _f, indent=2)
+    except Exception:
+        pass
+
+
+def _is_any_running() -> bool:
+    return bool(_active_procs)
+
+
+def _launch_gearbox_bg(project_id: str) -> None:
+    """Launch gearbox for a project without requiring a SocketIO context."""
+    raw = load_projects()
+    pinfo = raw.get("projects", {}).get(project_id)
+    if not pinfo:
+        return
+    if project_id in _active_procs:
+        return
+    yaml_path = pinfo.get("yaml_path", "")
+    if not yaml_path or not os.path.isfile(yaml_path):
+        return
+    gearbox_path = os.path.join(_BASE_DIR, "..", "Gearbox", "gearbox.py")
+    if not os.path.isfile(gearbox_path):
+        gearbox_path = "gearbox.py"
+    project_output_dir = os.path.dirname(os.path.abspath(yaml_path))
+    flask_port = app.config.get("SERVER_PORT", 5700)
+    ifaces     = get_all_interfaces()
+    iface_list = [
+        {"name": i["name"], "ip": i["ip"],
+         "url": f"http://{i['ip']}:{flask_port}/join/{project_id}"}
+        for i in ifaces
+    ]
+    cmd = ["sudo", "-E", "python3", gearbox_path, yaml_path,
+           "--join-interfaces", json.dumps(iface_list),
+           "--project-dir", project_output_dir]
+    answer_q = queue.Queue()
+    _answer_queues[project_id] = answer_q
+    _console_buffer[project_id] = []
+    _gearbox_log[project_id]    = []
+    _observations[project_id]   = []
+    _error_buffer[project_id]   = []
+    try:
+        proc = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True, bufsize=0,
+        )
+    except Exception as exc:
+        socketio.emit("gearbox_error", {"error": str(exc)},
+                      room=_room(project_id))
+        _answer_queues.pop(project_id, None)
+        return
+    _active_procs[project_id] = proc
+    socketio.emit("gearbox_started", {"pid": proc.pid}, room=_room(project_id))
+    threading.Thread(target=_stdout_reader, args=(proc, project_id), daemon=True).start()
+    threading.Thread(target=_stderr_reader, args=(proc, project_id), daemon=True).start()
+
+
+def _execute_queued_job(job: dict) -> None:
+    project_id = job.get("project_id", "")
+    if not project_id:
+        return
+    _launch_gearbox_bg(project_id)
+
+
+def _dequeue_next() -> None:
+    with _queue_lock:
+        if not _job_queue or _is_any_running():
+            return
+        job = _job_queue.pop(0)
+        _save_execute_queue()
+    threading.Thread(target=_execute_queued_job, args=(job,), daemon=True).start()
+
+
+# ---------------------------------------------------------------------------
+# API: Project template + remote execute
+# ---------------------------------------------------------------------------
+
+@app.route("/api/project-template")
+def api_project_template():
+    return jsonify({
+        "tool": "gauntlet",
+        "description": "Hardware security assessment platform",
+        "fields": {
+            "client_name":          {"type": "string",  "required": True,  "label": "Client Name"},
+            "client_short":         {"type": "string",  "required": True,  "label": "Client Short Name"},
+            "device":               {"type": "string",  "required": True,  "label": "Device Name"},
+            "device_model":         {"type": "string",  "required": False, "label": "Device Model Number"},
+            "device_sw_version":    {"type": "string",  "required": False, "label": "Device Software Version"},
+            "start_date":           {"type": "date",    "required": False, "label": "Start Date"},
+            "end_date":             {"type": "date",    "required": False, "label": "End Date"},
+            "consultant_name":      {"type": "string",  "required": False, "label": "Consultant Name"},
+            "consultant_title":     {"type": "string",  "required": False, "label": "Consultant Title"},
+            "consultant_email":     {"type": "string",  "required": False, "label": "Consultant Email"},
+            "poc_name":             {"type": "string",  "required": False, "label": "POC Name"},
+            "poc_phone":            {"type": "string",  "required": False, "label": "POC Phone"},
+            "poc_email":            {"type": "string",  "required": False, "label": "POC Email"},
+        },
+    })
+
+
+@app.route("/api/execute-project", methods=["POST"])
+def api_execute_project():
+    data = request.get_json(force=True, silent=True) or {}
+    execute = data.get("execute", True)
+
+    _cs_raw = (data.get("client_short") or "").strip()
+    _sd_raw = (data.get("start_date")   or "").strip()
+
+    if _cs_raw:
+        target_dir = str(_build_project_dir_structured(_cs_raw, _sd_raw))
+    else:
+        return jsonify({"error": "client_short is required"}), 400
+
+    yaml_data     = _build_yaml(data)
+    client_short  = (_cs_raw).replace(" ", "_").upper()
+    device        = (data.get("device") or "device").strip().replace(" ", "_").replace("/", "-")
+    yaml_filename = f"{client_short}_{device}.yaml"
+    yaml_path     = os.path.join(target_dir, yaml_filename)
+
+    with open(yaml_path, "w") as f:
+        yaml.dump(yaml_data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    projects_data = load_projects()
+    project_id    = str(uuid.uuid4())
+    project_name  = f"{data.get('client_name', 'Client')} — {data.get('device', 'Device')}"
+    projects_data["projects"][project_id] = {
+        "id":                 project_id,
+        "name":               project_name,
+        "yaml_path":          yaml_path,
+        "created":            datetime.now().strftime("%Y-%m-%d"),
+        "device_model_number": str(data.get("device_model", "") or "").strip(),
+    }
+    save_projects(projects_data)
+
+    if not execute:
+        return jsonify({"ok": True, "project_id": project_id, "queued": False, "started": False})
+
+    job = {"project_id": project_id}
+    with _queue_lock:
+        if _is_any_running():
+            position = len(_job_queue) + 1
+            _job_queue.append(job)
+            _save_execute_queue()
+            return jsonify({"ok": True, "project_id": project_id, "queued": True, "position": position})
+
+    threading.Thread(target=_execute_queued_job, args=(job,), daemon=True).start()
+    return jsonify({"ok": True, "project_id": project_id, "queued": False, "started": True})
+
+
 # ─── Entry Point ───────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
+    _load_execute_queue()
     print(f"Gauntlet v{VERSION} — Hardware Security Assessment Platform")
     print("Listening on https://0.0.0.0:5700")
     app.config['SERVER_PORT'] = 5700
