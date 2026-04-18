@@ -3,7 +3,7 @@ Aether Engineering Suite — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -37,7 +37,7 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0            # disable static file cac
 app.config['SESSION_COOKIE_SECURE']      = False  # self-signed cert; HTTPS enforced server-side
 app.config['SESSION_COOKIE_HTTPONLY']    = True
 app.config['SESSION_COOKIE_SAMESITE']   = 'Lax'
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 _auth.init_auth()
 
 @app.after_request
@@ -6271,6 +6271,14 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for('login'))
+
+
+@app.route('/api/session_ping', methods=['POST'])
+def session_ping():
+    if not session.get('authenticated'):
+        return jsonify({'ok': False}), 401
+    session.modified = True
+    return jsonify({'ok': True})
 
 
 @app.route('/api/nexus-status')

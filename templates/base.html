@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-palette="tuxedo" data-mode="light">
+<html lang="en" data-palette="resume" data-mode="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,13 +7,13 @@
   <!-- Restore theme immediately — before CSS parses — to eliminate flash of wrong theme -->
   <script>
     (function(){
-      var PALETTES = ['forge','frigid','futuristic','tuxedo','bloom','retro','prism','jarvis','jarhead','speakeasy','hogwarts','rivendell','coruscant','meridian','alabaster','noir','oldglory','alchemist','doom','lcars'];
+      var PALETTES = ['tuxedo','meridian','alabaster','noir','leadership','blueprint','resume','foundry','forge','frigid','futuristic','bloom','prism','ember','oldglory','alchemist','speakeasy','jarhead','coruscant','retro','jarvis','hal9000','neuromancer','deepspace','bladerunner','synthwave','hogwarts','rivendell','lcars','espresso','terracotta','sage','blush'];
       try {
         var p = localStorage.getItem('gauntlet-palette');
         var m = localStorage.getItem('gauntlet-mode');
         var html = document.documentElement;
         if (p && PALETTES.indexOf(p) !== -1) html.setAttribute('data-palette', p);
-        else html.setAttribute('data-palette', 'tuxedo');
+        else html.setAttribute('data-palette', 'resume');
         if (m === 'light' || m === 'dark') html.setAttribute('data-mode', m);
         else html.setAttribute('data-mode', 'light');
       } catch(e) {}
@@ -141,6 +141,7 @@
       </div>
       <span class="toggle-label" id="modeLabel">Dark</span>
     </button>
+    <a href="{{ url_for('logout') }}" class="nav-logout">Logout</a>
   </div>
 </nav>
 
@@ -195,5 +196,94 @@ window._fmtSize = function(b) {
 };
 </script>
 {% block scripts %}{% endblock %}
+
+<!-- ── Session Timeout Warning ────────────────────────────────── -->
+<style>
+.session-timeout-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,.65); z-index: 10000;
+  align-items: center; justify-content: center;
+}
+.session-timeout-overlay.active { display: flex; }
+.session-timeout-card {
+  background: var(--bg-panel, #1a1a24);
+  border: 1px solid var(--border-accent, #c8a860);
+  border-radius: 10px; padding: 2rem 2.25rem; max-width: 360px;
+  width: 90%; text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+}
+.session-timeout-card h3 { font-size: 1rem; font-weight: 700; margin-bottom: .75rem; color: var(--text-primary); }
+.session-timeout-card p  { font-size: .88rem; color: var(--text-secondary); margin-bottom: .75rem; line-height: 1.5; }
+.session-timeout-countdown {
+  font-size: 1.75rem; font-weight: 700; font-family: monospace;
+  color: var(--accent-primary); display: block; margin: .5rem 0 1.25rem;
+}
+.session-timeout-btns { display: flex; gap: .75rem; justify-content: center; flex-wrap: wrap; }
+.session-timeout-btns button {
+  padding: .55rem 1.25rem; border-radius: 5px; border: none;
+  cursor: pointer; font-size: .88rem; font-weight: 600; transition: opacity .15s;
+}
+.session-timeout-btns button:hover { opacity: .85; }
+.session-timeout-logout   { background: var(--danger,       #8c3030); color: #fff; }
+.session-timeout-continue { background: var(--accent-primary, #c8a860); color: #fff; }
+</style>
+<div class="session-timeout-overlay" id="sessionTimeoutOverlay">
+  <div class="session-timeout-card">
+    <h3>Session Expiring Soon</h3>
+    <p>Your session will expire in</p>
+    <span class="session-timeout-countdown" id="sessionTimeoutCountdown">5:00</span>
+    <p>Click <strong>Continue Session</strong> to stay logged in,<br>or <strong>Logout</strong> to end now.</p>
+    <div class="session-timeout-btns">
+      <button class="session-timeout-logout"   onclick="sessionTimeoutLogout()">Logout</button>
+      <button class="session-timeout-continue" onclick="sessionTimeoutContinue()">Continue Session</button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  var SESSION_MS  = 30 * 60 * 1000;
+  var WARN_BEFORE =  5 * 60 * 1000;
+  var _warnTimer, _expireTimer, _countdownInt;
+
+  function _fmt(s) { return Math.floor(s/60) + ':' + ('0' + (s%60)).slice(-2); }
+
+  function _resetTimers() {
+    clearTimeout(_warnTimer); clearTimeout(_expireTimer); clearInterval(_countdownInt);
+    _warnTimer   = setTimeout(_showWarning, SESSION_MS - WARN_BEFORE);
+    _expireTimer = setTimeout(function () { window.location.href = '/logout'; }, SESSION_MS);
+  }
+
+  function _showWarning() {
+    var secs = Math.floor(WARN_BEFORE / 1000);
+    var el = document.getElementById('sessionTimeoutCountdown');
+    var ov = document.getElementById('sessionTimeoutOverlay');
+    if (el) el.textContent = _fmt(secs);
+    if (ov) ov.classList.add('active');
+    _countdownInt = setInterval(function () {
+      secs--;
+      if (el) el.textContent = _fmt(Math.max(0, secs));
+      if (secs <= 0) clearInterval(_countdownInt);
+    }, 1000);
+  }
+
+  window.sessionTimeoutLogout = function () { window.location.href = '/logout'; };
+
+  window.sessionTimeoutContinue = function () {
+    fetch('/api/session_ping', { method: 'POST', credentials: 'same-origin' })
+      .then(function (r) {
+        if (r.ok) {
+          var ov = document.getElementById('sessionTimeoutOverlay');
+          if (ov) ov.classList.remove('active');
+          _resetTimers();
+        } else {
+          window.location.href = '/logout';
+        }
+      })
+      .catch(function () { window.location.href = '/logout'; });
+  };
+
+  _resetTimers();
+})();
+</script>
+
 </body>
 </html>
