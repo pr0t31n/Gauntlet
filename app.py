@@ -3,7 +3,7 @@ Aether Engineering Suite — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -6307,25 +6307,47 @@ def api_arbiter_projects():
                     client_name = parts[clients_idx + 1]
             except Exception:
                 pass
-        # Try to read client_short from the yaml
+        # Read full engagement metadata from the YAML
+        _client_short = _consultant = _consultant_email = ""
+        _poc_name = _poc_email = _poc_phone = ""
+        _start = _end = ""
         try:
             if yaml_path and os.path.exists(yaml_path):
                 _y = load_yaml(yaml_path)
-                if _y.get("client_short"):
-                    client_name = _y["client_short"]
+                if isinstance(_y, dict):
+                    _client_short     = str(_y.get("client_short", "") or "")
+                    _consultant       = str(_y.get("consultant_name", "") or "")
+                    _consultant_email = str(_y.get("consultant_email", "") or "")
+                    _start            = str(_y.get("start_date", "") or "")
+                    _end              = str(_y.get("end_date", "") or "")
+                    _poc              = _y.get("client_poc", {})
+                    if isinstance(_poc, dict):
+                        _poc_name  = str(_poc.get("name",  "") or "")
+                        _poc_email = str(_poc.get("email", "") or "")
+                        _poc_phone = str(_poc.get("phone", "") or "")
+                    if _client_short:
+                        client_name = _client_short
         except Exception:
             pass
         status = "running" if pid in _active_procs else "idle"
         result.append({
-            "id":           pid,
-            "name":         proj.get("name", pid),
-            "client_name":  client_name,
-            "tool":         "gearbox",
-            "project_dir":  project_dir,
-            "status":       status,
-            "finding_count": 0,
-            "has_findings": False,
-            "created":      proj.get("created", ""),
+            "id":               pid,
+            "name":             proj.get("name", pid),
+            "client_name":      client_name,
+            "client_short":     _client_short,
+            "consultant":       _consultant,
+            "consultant_email": _consultant_email,
+            "poc_name":         _poc_name,
+            "poc_email":        _poc_email,
+            "poc_phone":        _poc_phone,
+            "start_date":       _start,
+            "end_date":         _end,
+            "tool":             "gearbox",
+            "project_dir":      project_dir,
+            "status":           status,
+            "finding_count":    0,
+            "has_findings":     False,
+            "created":          proj.get("created", ""),
         })
     return jsonify(result)
 
