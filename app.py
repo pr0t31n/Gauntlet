@@ -3,7 +3,7 @@ Aether Engineering Suite — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.3.1"
+VERSION = "1.3.2"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -53,7 +53,7 @@ def _no_cache(response):
 @app.before_request
 def _auth_gate():
     return _auth.auth_gate()
-socketio = SocketIO(app, async_mode='threading', cors_allowed_origins='*')
+socketio = SocketIO(app, async_mode='threading', cors_allowed_origins='*', manage_session=False)
 
 import platform as _platform
 
@@ -6350,6 +6350,44 @@ def api_arbiter_projects():
             "created":          proj.get("created", ""),
         })
     return jsonify(result)
+
+
+@app.route('/api/projects/<project_id>/status')
+def api_project_status(project_id):
+    """Standardized status endpoint polled by Arbiter's scan_poll_worker."""
+    raw = load_projects()
+    if project_id not in raw.get("projects", {}):
+        return jsonify({"error": "not found"}), 404
+
+    running = project_id in _active_procs
+
+    queue_position = None
+    with _queue_lock:
+        for i, job in enumerate(_job_queue):
+            if job.get("project_id") == project_id:
+                queue_position = i + 1
+                break
+
+    if running:
+        overall = "running"
+    elif queue_position is not None:
+        overall = "queued"
+    else:
+        proj = raw["projects"][project_id]
+        s = proj.get("status", "idle")
+        if s in ("complete", "done", "finished"):
+            overall = "complete"
+        elif s == "error":
+            overall = "error"
+        else:
+            overall = "idle"
+
+    return jsonify({
+        "project_id":     project_id,
+        "status":         overall,
+        "tool":           "gauntlet",
+        "queue_position": queue_position,
+    })
 
 
 @app.route('/auth/change-password', methods=['GET', 'POST'])

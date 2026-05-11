@@ -267,12 +267,13 @@ _PUBLIC = {"/login", "/logout", "/api/nexus-status"}
 
 def auth_gate():
     """Call from app.before_request. Returns a redirect Response if auth needed, else None."""
-    if request.path.startswith("/static/"):
+    path = request.path
+    if path.startswith("/static/") or path.startswith("/socket.io/"):
         return None
-    if request.path in _PUBLIC:
+    if path in _PUBLIC:
         return None
     if not session.get("authenticated"):
         return redirect(url_for("login"))
-    if must_change_password() and request.path != "/auth/change-password":
+    if must_change_password() and path != "/auth/change-password":
         return redirect(url_for("change_password"))
     return None
