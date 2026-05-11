@@ -3,7 +3,7 @@ Aether Engineering Suite — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.3.2"
+VERSION = "1.3.3"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -87,7 +87,7 @@ def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        path = Path(_BASE_DIR) / "output" / f"{slug}_{dt_str}"
+        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
         path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -148,7 +148,7 @@ def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        path = Path(_BASE_DIR) / "output" / f"{slug}_{dt_str}"
+        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
         path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -209,7 +209,7 @@ def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        path = Path(_BASE_DIR) / "output" / f"{slug}_{dt_str}"
+        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
         path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -270,7 +270,7 @@ def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        path = Path(_BASE_DIR) / "output" / f"{slug}_{dt_str}"
+        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
         path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -331,7 +331,7 @@ def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        path = Path(_BASE_DIR) / "output" / f"{slug}_{dt_str}"
+        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
         path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -392,7 +392,7 @@ def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        path = Path(_BASE_DIR) / "output" / f"{slug}_{dt_str}"
+        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
         path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -453,7 +453,7 @@ def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        path = Path(_BASE_DIR) / "output" / f"{slug}_{dt_str}"
+        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
         path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -514,7 +514,7 @@ def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        path = Path(_BASE_DIR) / "output" / f"{slug}_{dt_str}"
+        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
         path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -575,7 +575,7 @@ def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        path = Path(_BASE_DIR) / "output" / f"{slug}_{dt_str}"
+        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
         path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -636,7 +636,7 @@ def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        path = Path(_BASE_DIR) / "output" / f"{slug}_{dt_str}"
+        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
         path.mkdir(parents=True, exist_ok=True)
     return path
 
