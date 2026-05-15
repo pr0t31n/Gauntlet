@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.4.2"
+VERSION = "1.4.3"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -6513,7 +6513,7 @@ def _launch_gearbox_bg(project_id: str) -> None:
         return
     _active_procs[project_id] = proc
     socketio.emit("gearbox_started", {"pid": proc.pid}, room=_room(project_id))
-    threading.Thread(target=_stdout_reader, args=(proc, project_id), daemon=True).start()
+    threading.Thread(target=_stdout_reader, args=(proc, project_id, answer_q), daemon=True).start()
     threading.Thread(target=_stderr_reader, args=(proc, project_id), daemon=True).start()
 
 
