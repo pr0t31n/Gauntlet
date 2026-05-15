@@ -3,7 +3,7 @@ Aether Engineering Suite — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.3.3"
+VERSION = "1.4.0"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)

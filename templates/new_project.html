@@ -21,19 +21,8 @@
 
   <form id="newProjectForm" novalidate autocomplete="off">
 
-    <!-- ═══ Section 1: Target Directory (always visible) ═══ -->
-    <div class="form-section" id="sec-dir">
-      <div class="form-section-title">⚙ Target Directory</div>
-      <div class="form-group">
-        <label class="form-label" for="targetDir">Project Parent Directory <span class="required">*</span></label>
-        <input type="text" id="targetDir" name="target_dir" class="form-control"
-          placeholder="/path/to/projects/client_name" required>
-        <span class="form-hint">Full server-side path. A subfolder will be created here for the project YAML.</span>
-      </div>
-    </div>
-
-    <!-- ═══ Section 2: Client Information ═══ -->
-    <div class="form-section hidden" id="sec-client">
+    <!-- ═══ Section 1: Client Information ═══ -->
+    <div class="form-section" id="sec-client">
       <div class="form-section-title">◈ Client Information</div>
       <div class="form-row">
         <div class="form-group">
@@ -195,7 +184,6 @@
   const filled = el => el && el.value.trim() !== '';
 
   // ── Progressive reveal ───────────────────────────────────────────────────────
-  const targetDir = $('targetDir');
   const clientName = $('clientName');
   const clientShort = $('clientShort');
   const consultantName = $('consultantName');
@@ -213,9 +201,6 @@
   const numSubdevices = $('numSubdevices');
 
   function onAnyInput() {
-    // Dir → show client section
-    if (filled(targetDir)) show($('sec-client'));
-
     // clientName → enable clientShort
     if (filled(clientName)) {
       enable(clientShort, $('fg-clientShort'));
@@ -420,7 +405,6 @@
   // ── Validation ───────────────────────────────────────────────────────────────
   function collectErrors() {
     const errors = [];
-    if (!filled(targetDir))      errors.push('Target directory');
     if (!filled(clientName))     errors.push('Client full name');
     if (!filled(clientShort))    errors.push('Client short name');
     if (!filled(consultantName)) errors.push('Consultant name');
@@ -482,7 +466,7 @@
       btn.disabled = true;
       btn.classList.add('btn-disabled');
       // Only show errors if user has started filling the form
-      if (filled(targetDir)) {
+      if (filled(clientName)) {
         errList.innerHTML = errors.map(e => `<li>${e}</li>`).join('');
         show(errDiv);
       }
@@ -519,7 +503,6 @@
     }
 
     return {
-      target_dir:        targetDir.value.trim(),
       client_name:       clientName.value.trim(),
       client_short:      clientShort.value.trim(),
       consultant_name:   consultantName.value.trim(),
