@@ -32,5 +32,4 @@ data/
 .DS_Store
 Thumbs.db
 
-# socket.io (downloaded by install.py)
-static/js/socket.io.min.js
+# socket.io vendored in static/js/ — tracked in git

@@ -254,7 +254,35 @@ def phase_git(dry_run: bool) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Phase 5 — Service installation (Flask app — no symlinks)
+# Phase 5 — Static assets
+# ---------------------------------------------------------------------------
+
+SOCKET_IO_URL      = "https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"
+SOCKET_IO_DEST     = Path("/opt/pr0t31n/Gauntlet/static/js/socket.io.min.js")
+SOCKET_IO_MIN_BYTES = 40_000
+
+
+def phase_static_assets(dry_run: bool) -> None:
+    phase_header("PHASE 5 — Static Assets")
+    SOCKET_IO_DEST.parent.mkdir(parents=True, exist_ok=True)
+    if SOCKET_IO_DEST.exists() and SOCKET_IO_DEST.stat().st_size >= SOCKET_IO_MIN_BYTES:
+        success(f"socket.io.min.js already present ({SOCKET_IO_DEST.stat().st_size} bytes) — skipping.")
+        return
+    info("Downloading socket.io.min.js from CDN…")
+    if dry_run:
+        cprint(f"    [DRY-RUN] Would download {SOCKET_IO_URL} → {SOCKET_IO_DEST}", MAGENTA)
+        return
+    try:
+        import urllib.request
+        urllib.request.urlretrieve(SOCKET_IO_URL, SOCKET_IO_DEST)
+        success(f"Downloaded socket.io.min.js ({SOCKET_IO_DEST.stat().st_size} bytes)")
+    except Exception as exc:
+        warn(f"CDN download failed: {exc}")
+        warn("socket.io.min.js is also vendored in the git repo — re-run 'git pull' to restore it.")
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 — Service installation (Flask app — no symlinks)
 # ---------------------------------------------------------------------------
 
 SYSTEMD_UNIT = """\
@@ -304,7 +332,7 @@ LAUNCHD_PLIST = """\
 
 
 def phase_service(os_id: str, dry_run: bool) -> None:
-    phase_header("PHASE 5 — Service Installation")
+    phase_header("PHASE 6 — Service Installation")
     info("Gauntlet is a Flask app — no /usr/local/bin symlink created.")
 
     if os_id in ("kali", "ubuntu", "rhel", "suse"):
@@ -381,6 +409,12 @@ def phase_verify(os_id: str) -> None:
         success(f"  {str(app_path):40s} exists")
     else:
         warn(f"  {str(app_path):40s} NOT FOUND — check your Gauntlet installation")
+        all_ok = False
+
+    if SOCKET_IO_DEST.exists() and SOCKET_IO_DEST.stat().st_size >= SOCKET_IO_MIN_BYTES:
+        success(f"  {str(SOCKET_IO_DEST):40s} present")
+    else:
+        warn(f"  {str(SOCKET_IO_DEST):40s} MISSING — run install.py again")
         all_ok = False
 
     if os_id in ("kali", "ubuntu", "rhel", "suse"):
@@ -478,7 +512,10 @@ def main() -> None:
     else:
         info("Skipping git phase (--skip-git).")
 
-    # Phase 5 — Service (Flask app — no symlinks)
+    # Phase 5 — Static assets
+    phase_static_assets(dry_run)
+
+    # Phase 6 — Service (Flask app — no symlinks)
     if is_root() or dry_run:
         phase_service(os_id, dry_run)
     else:
