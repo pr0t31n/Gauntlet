@@ -4009,7 +4009,7 @@ fetch(`/api/gauntlet_log/${PROJECT_ID_GAL}`)
       document.head.appendChild(s);
     }
     window._socketIoReady = false;
-    loadScript('/socket.io/socket.io.js',
+    loadScript("/static/js/socket.io.min.js",
       function() { window._socketIoReady = true; initGearbox(); },
       function() {
         loadScript('https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js',

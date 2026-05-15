@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.4.1"
+VERSION = "1.4.2"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -2461,12 +2461,6 @@ def _pcap_to_text(pcap_path: str) -> str:
                 'Raw bytes cannot be shown without dpkt.]')
     except Exception as e:
         return f'[Error reading pcap: {e}]'
-
-@app.route('/socket.io/socket.io.js')
-def serve_socket_io_js():
-    p = os.path.join(os.path.dirname(__file__), 'static', 'js', 'socket.io.min.js')
-    return send_file(p, mimetype='application/javascript')
-
 
 @app.route('/')
 def index():
@@ -6356,6 +6350,12 @@ def api_arbiter_projects():
             "created":          proj.get("created", ""),
         })
     return jsonify(result)
+
+
+@app.route('/api/phalanx-projects')
+def api_phalanx_projects():
+    """Alias for /api/arbiter-projects — consumed by Phalanx purgatory sync."""
+    return api_arbiter_projects()
 
 
 @app.route('/api/projects/<project_id>/status')

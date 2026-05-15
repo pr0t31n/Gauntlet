@@ -593,7 +593,7 @@
     s.src = src; s.onload = cb; s.onerror = err;
     document.head.appendChild(s);
   }
-  loadScript('/socket.io/socket.io.js', init,
+  loadScript('/static/js/socket.io.min.js', init,
     function() {
       loadScript('https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js',
         init,
