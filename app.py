@@ -6266,10 +6266,15 @@ def login():
             session['username'] = username
             if _auth.must_change_password():
                 return redirect(url_for('change_password'))
+            next_url = request.form.get('next', '').strip()
+            if next_url and next_url.startswith('/') and '://' not in next_url:
+                return redirect(next_url)
             return redirect(url_for('index'))
+        next_url = request.form.get('next', '')
         return render_template('login.html', error='Invalid credentials.', username=username,
-                               csrf_token=_auth.generate_csrf())
-    return render_template('login.html', csrf_token=_auth.generate_csrf())
+                               csrf_token=_auth.generate_csrf(), next_url=next_url)
+    next_url = request.args.get('next', '')
+    return render_template('login.html', csrf_token=_auth.generate_csrf(), next_url=next_url)
 
 
 @app.route('/logout')

@@ -273,7 +273,7 @@ def auth_gate():
     if path in _PUBLIC:
         return None
     if not session.get("authenticated"):
-        return redirect(url_for("login"))
+        return redirect(url_for("login", next=request.path))
     if must_change_password() and path != "/auth/change-password":
         return redirect(url_for("change_password"))
     return None

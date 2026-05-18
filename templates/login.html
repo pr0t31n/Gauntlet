@@ -144,6 +144,7 @@
 
     <form method="post" action="/login" autocomplete="off">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="next" value="{{ next_url or '' }}">
       <div class="auth-field">
         <label for="username">USERNAME</label>
         <input type="text" id="username" name="username" autocomplete="username"
