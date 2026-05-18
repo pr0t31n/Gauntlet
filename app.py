@@ -5845,8 +5845,13 @@ def handle_leave_project(data):
 def handle_start_gearbox(data):
     d = data or {}
     project_id   = d.get('project_id', '')
-    gearbox_path = d.get('gearbox_path', 'gearbox.py')
+    gearbox_path = d.get('gearbox_path', '').strip() or 'gearbox.py'
     yaml_path    = d.get('yaml_path', '')
+    # Resolve a bare/relative path to the canonical install location
+    if not os.path.isabs(gearbox_path) or not os.path.isfile(gearbox_path):
+        _default = os.path.normpath(os.path.join(_BASE_DIR, '..', 'Gearbox', 'gearbox.py'))
+        if os.path.isfile(_default):
+            gearbox_path = _default
     extra_args   = d.get('extra_args', [])
 
     if not project_id:
