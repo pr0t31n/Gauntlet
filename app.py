@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.4.8"
+VERSION = "1.4.9"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -6450,6 +6450,18 @@ def api_arbiter_projects():
             status = "complete"
         else:
             status = "idle"
+            if yaml_path and os.path.exists(yaml_path):
+                try:
+                    _yaml_data = load_yaml(yaml_path)
+                    _progress  = load_progress(yaml_path)
+                    _pm        = compute_progress(_yaml_data, _progress)
+                    if _pm and all(v.get("completed") for v in _pm.values()):
+                        proj["status"] = "complete"
+                        raw["projects"][pid] = proj
+                        save_projects(raw)
+                        status = "complete"
+                except Exception:
+                    pass
         _finding_count = 0
         if yaml_path and os.path.exists(yaml_path):
             try:
@@ -6506,7 +6518,21 @@ def api_project_status(project_id):
         elif s == "error":
             overall = "error"
         else:
+            # Dynamically derive completion from progress.json for projects
+            # that finished before the status field was introduced.
             overall = "idle"
+            yaml_path = proj.get("yaml_path", "")
+            if yaml_path and os.path.exists(yaml_path):
+                try:
+                    _yaml_data = load_yaml(yaml_path)
+                    _progress  = load_progress(yaml_path)
+                    _pm        = compute_progress(_yaml_data, _progress)
+                    if _pm and all(v.get("completed") for v in _pm.values()):
+                        proj["status"] = "complete"
+                        save_projects(raw)
+                        overall = "complete"
+                except Exception:
+                    pass
 
     return jsonify({
         "project_id":     project_id,
