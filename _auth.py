@@ -264,7 +264,7 @@ def apply_security_headers(response):
 # ── Request gate ──────────────────────────────────────────────────────────────
 
 _PUBLIC = {"/login", "/logout", "/api/nexus-status", "/api/arbiter-projects"}
-_PUBLIC_PREFIXES = ("/api/projects/",)
+_PUBLIC_PREFIXES = ("/api/projects/", "/api/findings/")
 
 def auth_gate():
     """Call from app.before_request. Returns a redirect Response if auth needed, else None."""
