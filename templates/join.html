@@ -749,12 +749,31 @@ function init() {
   // ── Prompts ───────────────────────────────────────────────────────────────
   socket.on('gearbox_prompt', showPrompt);
 
+  function resetPhotoCapture() {
+    capturedBlob                = null;
+    capturedImg.src             = '';
+    capturedImg.style.display   = 'none';
+    cameraPreview.style.display = 'block';
+    btnRetake.style.display     = 'none';
+    btnCapture.style.display    = '';
+    btnSendPhoto.disabled       = true;
+    photoStatus.textContent     = '';
+    photoStatus.className       = 'photo-status';
+    startCamera();
+  }
+
   function showPrompt(payload) {
     promptActive    = true;
     selectedOption  = null;
     const question  = payload.question || '';
     const options   = payload.options  || [];
     const ptype     = payload.type     || 'text';
+
+    // Reset photo capture state for every new file prompt so the user
+    // always starts fresh and the old image is not re-sent
+    if (ptype === 'file') {
+      resetPhotoCapture();
+    }
 
     // Detect password prompts by type or question keyword
     const isPassword = ptype === 'password' ||
@@ -843,8 +862,12 @@ function init() {
       photoStatus.textContent = '✓ Photo received by session.';
       photoStatus.className   = 'photo-status ok';
       addLog('Photo uploaded: ' + (data.filename || ''), 'answered');
-      if (promptActive) dismissPrompt();
     }
+  });
+
+  // ── Prompt resolved (answer accepted by server) ───────────────────────────
+  socket.on('prompt_resolved', () => {
+    if (promptActive) dismissPrompt();
   });
 
   // ── Session helpers ───────────────────────────────────────────────────────
@@ -949,12 +972,9 @@ function init() {
         if (data.success) {
           photoStatus.textContent = '✓ Uploaded successfully.';
           photoStatus.className   = 'photo-status ok';
-          // Always answer the gearbox queue — the server ignores it if no prompt is waiting
-          socket.emit('gearbox_answer', {
-            project_id: PROJECT_ID,
-            answer:     data.path,
-          });
-          if (promptActive) dismissPrompt();
+          // The server-side upload_photo handler already queues the answer and
+          // emits prompt_resolved — do NOT also emit gearbox_answer here or the
+          // answer will be queued twice, auto-answering the next prompt.
           addLog('Photo sent: ' + (data.path || ''), 'answered');
         } else {
           photoStatus.textContent = '✗ ' + (data.error || 'Upload failed');

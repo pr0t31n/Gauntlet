@@ -3760,10 +3760,15 @@ def upload_photo():
             _mark_photo_module_complete(
                 yaml_path, project_id, sd_key, interface, inst_key, _module)
 
-        # Unblock the gearbox prompt queue if a photo prompt is waiting
+        # Unblock the gearbox prompt queue if a photo prompt is waiting.
+        # Also resolve the pending prompt so all sessions dismiss their UI —
+        # the join page must NOT emit gearbox_answer after upload_photo succeeds
+        # because that would double-queue the answer and auto-answer the next prompt.
         q = _answer_queues.get(project_id)
         if q:
             q.put(save_path)
+            _pending_prompts.pop(project_id, None)
+            socketio.emit('prompt_resolved', {}, room=_room(project_id))
 
         return jsonify({'success': True, 'path': save_path})
 
