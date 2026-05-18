@@ -263,14 +263,15 @@ def apply_security_headers(response):
 
 # ── Request gate ──────────────────────────────────────────────────────────────
 
-_PUBLIC = {"/login", "/logout", "/api/nexus-status"}
+_PUBLIC = {"/login", "/logout", "/api/nexus-status", "/api/arbiter-projects"}
+_PUBLIC_PREFIXES = ("/api/projects/",)
 
 def auth_gate():
     """Call from app.before_request. Returns a redirect Response if auth needed, else None."""
     path = request.path
     if path.startswith("/static/") or path.startswith("/socket.io/"):
         return None
-    if path in _PUBLIC:
+    if path in _PUBLIC or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
         return None
     if not session.get("authenticated"):
         return redirect(url_for("login", next=request.path))
