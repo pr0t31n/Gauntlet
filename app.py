@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.4.4"
+VERSION = "1.4.5"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -3525,7 +3525,7 @@ def join_page(project_id):
         yaml_data = {}
     local_ip   = get_local_ip()
     flask_port = app.config.get('SERVER_PORT', 5000)
-    join_url   = f'http://{local_ip}:{flask_port}/join/{project_id}'
+    join_url   = f'https://{local_ip}:{flask_port}/join/{project_id}'
     return render_template(
         'join.html',
         project_id=project_id,
@@ -3551,7 +3551,7 @@ def join_qr_img(project_id):
     flask_port = app.config.get('SERVER_PORT', 5000)
     ip_override = request.args.get('ip', '').strip()
     host = ip_override if ip_override else get_local_ip()
-    url  = f'http://{host}:{flask_port}/join/{project_id}'
+    url  = f'https://{host}:{flask_port}/join/{project_id}'
 
     # 1. qrcode + Pillow → PNG (convert to L/greyscale for broad browser compat)
     try:
@@ -3612,7 +3612,7 @@ def join_interfaces(project_id):
         {
             'name': iface['name'],
             'ip':   iface['ip'],
-            'url':  f"http://{iface['ip']}:{flask_port}/join/{project_id}",
+            'url':  f"https://{iface['ip']}:{flask_port}/join/{project_id}",
             'qr':   f"/api/join_qr_img/{project_id}?ip={iface['ip']}",
         }
         for iface in ifaces
@@ -3625,7 +3625,7 @@ def join_qr(project_id):
     """Return the primary join URL as JSON for backward compat."""
     local_ip   = get_local_ip()
     flask_port = app.config.get('SERVER_PORT', 5000)
-    url        = f'http://{local_ip}:{flask_port}/join/{project_id}'
+    url        = f'https://{local_ip}:{flask_port}/join/{project_id}'
     return jsonify({'url': url, 'project_id': project_id})
 
 
@@ -5882,7 +5882,7 @@ def handle_start_gearbox(data):
     ifaces      = get_all_interfaces()
     iface_list  = [
         {'name': i['name'], 'ip': i['ip'],
-         'url': f"http://{i['ip']}:{flask_port}/join/{project_id}"}
+         'url': f"https://{i['ip']}:{flask_port}/join/{project_id}"}
         for i in ifaces
     ]
     cmd.extend(['--join-interfaces', json.dumps(iface_list)])
@@ -6489,7 +6489,7 @@ def _launch_gearbox_bg(project_id: str) -> None:
     ifaces     = get_all_interfaces()
     iface_list = [
         {"name": i["name"], "ip": i["ip"],
-         "url": f"http://{i['ip']}:{flask_port}/join/{project_id}"}
+         "url": f"https://{i['ip']}:{flask_port}/join/{project_id}"}
         for i in ifaces
     ]
     cmd = ["sudo", "-E", "python3", gearbox_path, yaml_path,
