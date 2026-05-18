@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.4.5"
+VERSION = "1.4.6"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -764,21 +764,32 @@ def _ts() -> str:
 # ─── Interface & Module Registry (mirrors gearbox.py) ──────────────────────────
 
 INTERFACE_MODULES: dict[str, list[str]] = {
-    "Ethernet":     ["Photo", "EthernetIface", "Ethtool", "ConfigDiscovery",
-                     "TrafficCollector", "DhcpServer", "NmapLive", "Nessus", "Responder",
-                     "NmapPort", "BannerGrab", "Web", "Nuclei", "SSL", "SSH", "FTP", "SMB", "NFS",
-                     "EthernetCleanup"],
-    "USB":          ["Photo", "UsbPower", "Keyboard", "KeyCombos", "Mouse", "BashBunny"],
-    "Ethernet_tap": ["Photo", "Tcpdump_running", "Tcpdump_boot", "Tcpdump_shutdown"],
-    "HDMI":         ["Photo", "PortType", "Input", "Output", "EDID", "HdmiDDC", "HdmiHDCP", "HdmiCEC"],
-    "Dvi":          ["Photo", "PortType", "Input", "Output", "EDID", "HdmiDDC"],
-    "sdi":          ["Photo", "PortType", "Input", "Output", "EDID", "HdmiDDC", "HdmiHDCP", "HdmiCEC"],
-    "Dp":           ["Photo", "PortType", "Input", "Output", "EDID", "HdmiDDC", "HdmiHDCP", "HdmiCEC"],
-    "Rca":          ["Photo", "Input", "Output"],
-    "Aux":          ["Photo", "Input", "Output"],
-    "Zigbee":       ["Photo", "Sniff", "Flood"],
-    "DB9":          ["Photo", "SerialDetect", "CanAssess"],
-    "RFID":         ["Photo", "RFIDSniff", "RFIDReplay"],
+    "Ethernet":     ["Photo", "EthernetIface", "Ethtool", "EthtoolConnectedPhoto",
+                     "ConfigDiscovery", "TrafficCollector", "DhcpServer", "NmapLive", "Nessus",
+                     "Responder", "NmapPort", "BannerGrab", "Web", "Nuclei", "SSL", "SSH",
+                     "FTP", "SMB", "NFS", "EthernetCleanup"],
+    "USB":          ["Photo", "UsbPower", "UsbPowerConnectedPhoto", "Keyboard",
+                     "KeyboardConnectedPhoto", "KeyCombos", "Mouse", "MouseConnectedPhoto",
+                     "BashBunny", "BashBunnyConnectedPhoto"],
+    "Ethernet_tap": ["Photo", "Tcpdump_running", "Tcpdump_runningConnectedPhoto",
+                     "Tcpdump_boot", "Tcpdump_bootConnectedPhoto", "Tcpdump_shutdown"],
+    "HDMI":         ["Photo", "PortType", "Input", "InputConnectedPhoto", "Output",
+                     "OutputConnectedPhoto", "EDID", "HdmiDDC", "HdmiHDCP",
+                     "HdmiCEC", "HdmiCECConnectedPhoto"],
+    "Dvi":          ["Photo", "PortType", "Input", "InputConnectedPhoto", "Output",
+                     "OutputConnectedPhoto", "EDID", "HdmiDDC"],
+    "sdi":          ["Photo", "PortType", "Input", "InputConnectedPhoto", "Output",
+                     "OutputConnectedPhoto", "EDID", "HdmiDDC", "HdmiHDCP",
+                     "HdmiCEC", "HdmiCECConnectedPhoto"],
+    "Dp":           ["Photo", "PortType", "Input", "InputConnectedPhoto", "Output",
+                     "OutputConnectedPhoto", "EDID", "HdmiDDC", "HdmiHDCP",
+                     "HdmiCEC", "HdmiCECConnectedPhoto"],
+    "Rca":          ["Photo", "Input", "InputConnectedPhoto", "Output", "OutputConnectedPhoto"],
+    "Aux":          ["Photo", "Input", "InputConnectedPhoto", "Output", "OutputConnectedPhoto"],
+    "Zigbee":       ["Photo", "Sniff", "SniffConnectedPhoto", "Flood"],
+    "DB9":          ["Photo", "SerialDetect", "SerialDetectConnectedPhoto",
+                     "CanAssess", "CanAssessConnectedPhoto"],
+    "RFID":         ["Photo", "RFIDSniff", "RFIDSniffConnectedPhoto", "RFIDReplay"],
 }
 
 INTERFACE_TYPES = list(INTERFACE_MODULES.keys())
@@ -1906,6 +1917,11 @@ MODULE_EVIDENCE: dict[str, list[dict]] = {
         # Gearbox writes {file_prefix}_ethtool.txt directly in instance_dir
         {'subdir': '', 'patterns': ['*ethtool*.txt']},
     ],
+    'EthtoolConnectedPhoto': [
+        {'subdir': 'EthtoolConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
+    ],
     'ConfigDiscovery': [
         {'subdir': 'ConfigDiscovery',
          'patterns': ['config_discovery_log.txt', '*.pcap', '*.txt'],
@@ -1975,9 +1991,19 @@ MODULE_EVIDENCE: dict[str, list[dict]] = {
         {'subdir': 'UsbPower', 'patterns': ['*usb_power*.txt', '*.txt'],
          'skip_ok': True},
     ],
+    'UsbPowerConnectedPhoto': [
+        {'subdir': 'UsbPowerConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
+    ],
     'Keyboard': [
         {'subdir': 'Keyboard', 'patterns': ['*keyboard*.txt'],
          'skip_ok': True},
+    ],
+    'KeyboardConnectedPhoto': [
+        {'subdir': 'KeyboardConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
     ],
     'KeyCombos': [
         {'subdir': 'KeyCombos', 'patterns': ['*keycombos*.txt', '*.txt'],
@@ -1987,9 +2013,19 @@ MODULE_EVIDENCE: dict[str, list[dict]] = {
         {'subdir': 'Mouse', 'patterns': ['*mouse*.txt'],
          'skip_ok': True},
     ],
+    'MouseConnectedPhoto': [
+        {'subdir': 'MouseConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
+    ],
     'BashBunny': [
         {'subdir': 'BashBunny', 'patterns': ['*bashbunny*.txt'],
          'skip_ok': True},
+    ],
+    'BashBunnyConnectedPhoto': [
+        {'subdir': 'BashBunnyConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
     ],
 
     # ── Ethernet tap ─────────────────────────────────────────────────────────
@@ -1997,8 +2033,18 @@ MODULE_EVIDENCE: dict[str, list[dict]] = {
     'Tcpdump_running': [
         {'subdir': 'Tcpdump_running', 'patterns': ['*.pcap']},
     ],
+    'Tcpdump_runningConnectedPhoto': [
+        {'subdir': 'Tcpdump_runningConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
+    ],
     'Tcpdump_boot': [
         {'subdir': 'Tcpdump_boot', 'patterns': ['*.pcap']},
+    ],
+    'Tcpdump_bootConnectedPhoto': [
+        {'subdir': 'Tcpdump_bootConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
     ],
     'Tcpdump_shutdown': [
         {'subdir': 'Tcpdump_shutdown', 'patterns': ['*.pcap']},
@@ -2012,8 +2058,18 @@ MODULE_EVIDENCE: dict[str, list[dict]] = {
     'Input': [
         {'subdir': 'Input', 'patterns': ['*input*.txt']},
     ],
+    'InputConnectedPhoto': [
+        {'subdir': 'InputConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
+    ],
     'Output': [
         {'subdir': 'Output', 'patterns': ['*output*.txt']},
+    ],
+    'OutputConnectedPhoto': [
+        {'subdir': 'OutputConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
     ],
     'EDID': [
         {'subdir': 'EDID', 'patterns': ['*edid*.bin', '*edid*.txt']},
@@ -2030,10 +2086,20 @@ MODULE_EVIDENCE: dict[str, list[dict]] = {
         {'subdir': 'HdmiCEC', 'patterns': ['*cec*.txt', '*.txt'],
          'skip_ok': True},
     ],
+    'HdmiCECConnectedPhoto': [
+        {'subdir': 'HdmiCECConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
+    ],
 
     # ── Zigbee ───────────────────────────────────────────────────────────────
     'Sniff': [
         {'subdir': 'Sniff', 'patterns': ['*.pcap', '*.txt']},
+    ],
+    'SniffConnectedPhoto': [
+        {'subdir': 'SniffConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
     ],
     'Flood': [
         {'subdir': 'Flood', 'patterns': ['*.txt'],
@@ -2045,15 +2111,30 @@ MODULE_EVIDENCE: dict[str, list[dict]] = {
         {'subdir': 'SerialDetect', 'patterns': ['*.txt'],
          'skip_ok': True},
     ],
+    'SerialDetectConnectedPhoto': [
+        {'subdir': 'SerialDetectConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
+    ],
     'CanAssess': [
         {'subdir': 'CanAssess', 'patterns': ['*.txt', '*.log'],
          'skip_ok': True},
+    ],
+    'CanAssessConnectedPhoto': [
+        {'subdir': 'CanAssessConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
     ],
 
     # ── RFID ─────────────────────────────────────────────────────────────────
     'RFIDSniff': [
         {'subdir': 'RFIDSniff', 'patterns': ['*.txt'],
          'skip_ok': True},
+    ],
+    'RFIDSniffConnectedPhoto': [
+        {'subdir': 'RFIDSniffConnectedPhoto',
+         'patterns': ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif'],
+         'photo_only': True, 'skip_ok': True},
     ],
     'RFIDReplay': [
         {'subdir': 'RFIDReplay', 'patterns': ['*.txt'],
