@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.4.6"
+VERSION = "1.4.8"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -6201,6 +6201,25 @@ def _stdout_reader(proc: subprocess.Popen, project_id: str, answer_q: queue.Queu
     _owner_sid.pop(project_id, None)
     _pending_prompts.pop(project_id, None)
     _active_module.pop(project_id, None)
+
+    # Mark project complete if all instances finished
+    try:
+        _projs = load_projects()
+        _pinfo = _projs.get("projects", {}).get(project_id)
+        if _pinfo:
+            _yaml_path = _pinfo.get("yaml_path", "")
+            if _yaml_path and os.path.exists(_yaml_path):
+                _yaml_data = load_yaml(_yaml_path)
+                _progress  = load_progress(_yaml_path)
+                _pm        = compute_progress(_yaml_data, _progress)
+                if _pm and all(v.get("completed") for v in _pm.values()):
+                    _pinfo["status"] = "complete"
+                    save_projects(_projs)
+                    socketio.emit('project_status_update',
+                                  {'project_id': project_id, 'status': 'complete'}, room=room)
+    except Exception:
+        pass
+
     threading.Thread(target=_dequeue_next, daemon=True).start()
 
 
@@ -6425,7 +6444,18 @@ def api_arbiter_projects():
                         client_name = _client_short
         except Exception:
             pass
-        status = "running" if pid in _active_procs else "idle"
+        if pid in _active_procs:
+            status = "running"
+        elif proj.get("status") in ("complete", "done", "finished"):
+            status = "complete"
+        else:
+            status = "idle"
+        _finding_count = 0
+        if yaml_path and os.path.exists(yaml_path):
+            try:
+                _finding_count = len(load_findings(yaml_path))
+            except Exception:
+                pass
         result.append({
             "id":               pid,
             "name":             proj.get("name", pid),
@@ -6441,17 +6471,11 @@ def api_arbiter_projects():
             "tool":             "gearbox",
             "project_dir":      project_dir,
             "status":           status,
-            "finding_count":    0,
-            "has_findings":     False,
+            "finding_count":    _finding_count,
+            "has_findings":     _finding_count > 0,
             "created":          proj.get("created", ""),
         })
     return jsonify(result)
-
-
-@app.route('/api/phalanx-projects')
-def api_phalanx_projects():
-    """Alias for /api/arbiter-projects — consumed by Phalanx purgatory sync."""
-    return api_arbiter_projects()
 
 
 @app.route('/api/projects/<project_id>/status')
