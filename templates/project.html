@@ -1258,10 +1258,16 @@
         <button class="btn btn-secondary"
                 style="font-size:.72rem;padding:.25rem .55rem;margin-left:.4rem"
                 onclick="exportProjectJson()" title="Export project to JSON">⬇ Export JSON</button>
+        <button id="btnToggleFp" class="btn btn-secondary"
+                style="font-size:.72rem;padding:.25rem .55rem;margin-left:.4rem"
+                onclick="toggleFpView()"
+                title="Show false positives — hide active findings and reveal the recovery panel">
+          🚫 Show False Positives
+        </button>
       </div>
     </div>
 
-    <div class="panel">
+    <div class="panel" id="findingsPanel">
       <div class="panel-body" style="padding:0;overflow-x:auto">
         <table class="findings-table" id="findingsTable">
           <thead>
@@ -1276,7 +1282,7 @@
               <th style="width:130px">Interface / Instance</th>
               <th style="width:140px">Affected</th>
               <th style="width:80px">Output</th>
-              <th style="width:70px"></th>
+              <th style="width:90px">Actions</th>
             </tr>
           </thead>
           <tbody id="findingsTbody">
@@ -1953,6 +1959,7 @@
 {% block scripts %}
 {# ─── Always-rendered shared utilities (available on every tab) ─────────── #}
 <script src="{{ url_for('static', filename='js/qrgen.js') }}"></script>
+<script src="{{ url_for('static', filename='js/pr0t31n_v11_enrichment.js') }}"></script>
 <script>
 'use strict';
 // Shared QR picker — declared here so every tab (testing, evidence, etc.) can use it
@@ -3562,6 +3569,174 @@ window.deleteFinding   = deleteFinding;
 window.viewFindingFile = viewFindingFile;
 window.viewFindingFiles = viewFindingFiles;
 
+// ── False-positive management ─────────────────────────────────────────────
+// Marking a finding as FP removes it from findings.jsonl + findings.csv and
+// appends it to false_positives.json + false_positives.csv. Recover undoes
+// that. The 'Show False Positives' toggle hides the active findings table
+// and reveals the FP panel with per-row Recover buttons.
+
+let _fpShown = false;
+
+async function markFp(fid, btn) {
+  if (!fid) return;
+  if (!confirm('Mark this finding as a false positive? It will be moved to false_positives.json/csv and can be recovered later.')) return;
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await fetch('/api/mark_false_positive', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({project_id: PROJECT_ID, finding_id: fid}),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
+    // Remove row from DOM
+    const row = document.querySelector(`.finding-row[data-id="${fid}"]`);
+    if (row) row.remove();
+    _updateFindingsBadge && _updateFindingsBadge();
+  } catch (e) {
+    alert('Mark as false positive failed: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '🚫'; }
+  }
+}
+
+async function recoverFp(fid, btn) {
+  if (!fid) return;
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await fetch('/api/recover_false_positive', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({project_id: PROJECT_ID, finding_id: fid}),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
+    // Remove the FP row from the FP panel
+    const row = document.querySelector(`.fp-row[data-id="${fid}"]`);
+    if (row) row.remove();
+    // The recovered finding will reappear on next refresh of the findings table.
+  } catch (e) {
+    alert('Recover failed: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '↩ Recover'; }
+  }
+}
+
+async function _loadFalsePositives() {
+  try {
+    const r = await fetch(`/api/false_positives/${PROJECT_ID}`);
+    const d = await r.json();
+    return Array.isArray(d.false_positives) ? d.false_positives : [];
+  } catch {
+    return [];
+  }
+}
+
+function _renderFpRow(f) {
+  const fid    = f.id || '';
+  const risk   = f.risk || '?';
+  const title  = f.title || '';
+  const ip     = f.ip || '—';
+  const port   = f.port || '—';
+  const marked = f.marked_fp_at || '—';
+  return `<tr class="fp-row" data-id="${fid}">
+    <td><span class="risk-badge">${risk}</span></td>
+    <td><strong>${title.replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))}</strong></td>
+    <td style="font-size:.72rem;color:var(--text-muted);font-family:var(--font-mono)">${ip}</td>
+    <td style="font-size:.72rem;color:var(--text-muted);font-family:var(--font-mono)">${port}</td>
+    <td style="font-size:.7rem;color:var(--text-muted)">${marked}</td>
+    <td><button class="btn btn-secondary" style="font-size:.65rem;padding:.15rem .5rem"
+        onclick="recoverFp('${fid}',this)" title="Restore this finding to active findings">↩ Recover</button></td>
+  </tr>`;
+}
+
+async function toggleFpView() {
+  _fpShown = !_fpShown;
+  const btn        = document.getElementById('btnToggleFp');
+  const mainPanel  = document.getElementById('findingsPanel');
+  let   fpPanel    = document.getElementById('fpPanel');
+
+  if (_fpShown) {
+    if (btn) btn.textContent = '👁 Show Active Findings';
+    if (mainPanel) mainPanel.style.display = 'none';
+    if (!fpPanel) {
+      fpPanel = document.createElement('div');
+      fpPanel.id = 'fpPanel';
+      fpPanel.className = 'panel';
+      fpPanel.innerHTML = `
+        <div class="panel-header" style="padding:.5rem .9rem;border-bottom:1px solid var(--border-dim)">
+          <strong>False Positives</strong>
+          <span style="color:var(--text-muted);font-size:.74rem;margin-left:.5rem">
+            Findings marked as false positive — click Recover to restore.
+          </span>
+        </div>
+        <div class="panel-body" style="padding:0;overflow-x:auto">
+          <table class="findings-table" id="fpTable">
+            <thead><tr>
+              <th style="width:100px">Risk</th>
+              <th>Title</th>
+              <th style="width:130px">IP</th>
+              <th style="width:60px">Port</th>
+              <th style="width:170px">Marked At</th>
+              <th style="width:120px">Action</th>
+            </tr></thead>
+            <tbody id="fpTbody"><tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--text-muted)">⏳ Loading…</td></tr></tbody>
+          </table>
+        </div>`;
+      mainPanel.parentNode.insertBefore(fpPanel, mainPanel.nextSibling);
+    } else {
+      fpPanel.style.display = '';
+    }
+    const fps = await _loadFalsePositives();
+    const tb  = document.getElementById('fpTbody');
+    if (tb) {
+      tb.innerHTML = fps.length
+        ? fps.map(_renderFpRow).join('')
+        : '<tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--text-muted)">No false positives.</td></tr>';
+    }
+  } else {
+    if (btn) btn.textContent = '🚫 Show False Positives';
+    if (mainPanel) mainPanel.style.display = '';
+    if (fpPanel)   fpPanel.style.display   = 'none';
+  }
+}
+
+window.markFp        = markFp;
+window.recoverFp     = recoverFp;
+window.toggleFpView  = toggleFpView;
+
+// v1.1 enrichment toggle — clicking the 🔎 button on a finding row inserts
+// (or removes) a child row beneath it with the rendered enrichment block.
+function toggleV11Detail(fid, btn) {
+  if (!fid) return;
+  const row = btn.closest('tr');
+  if (!row) return;
+  const next = row.nextElementSibling;
+  if (next && next.classList.contains('v11-detail-row')) {
+    next.remove();
+    btn.textContent = '🔎';
+    return;
+  }
+  const f = _findingsMap[fid];
+  if (!f || !window.renderV11Enrichment) return;
+  const html = window.renderV11Enrichment(f);
+  if (!html) {
+    // No v1.1 fields present — flash the button briefly
+    const orig = btn.textContent;
+    btn.textContent = '∅';
+    setTimeout(() => { btn.textContent = orig; }, 700);
+    return;
+  }
+  const tr   = document.createElement('tr');
+  tr.className = 'v11-detail-row';
+  const td   = document.createElement('td');
+  td.colSpan = row.cells.length;
+  td.style.padding = '0';
+  td.innerHTML = html;
+  tr.appendChild(td);
+  row.parentNode.insertBefore(tr, next);
+  btn.textContent = '🔼';
+}
+window.toggleV11Detail = toggleV11Detail;
+
 // ── Live tab badge updates ────────────────────────────────────────────────
 function _updateFindingsBadge() {
   const badge = document.getElementById('tabBadgeFindings');
@@ -3620,9 +3795,17 @@ function _buildFindingTr(f) {
     <td style="font-size:.72rem;color:var(--text-muted)">${_escF(f.interface||'—')} / ${_escF(f.instance||'—')}</td>
     <td style="font-size:.7rem;color:var(--text-muted);max-width:140px">${(f.affected&&f.affected.length?f.affected.map(a=>'<span style="display:inline-block;background:var(--bg-input);border:1px solid var(--border-dim);border-radius:3px;padding:.05rem .3rem;margin:.1rem .15rem .1rem 0;font-size:.65rem;white-space:nowrap">'+_escF(a)+'</span>').join(''): '—')}</td>
     <td>${viewBtn}</td>
-    <td><button class="btn" style="font-size:.65rem;padding:.15rem .4rem;
+    <td style="white-space:nowrap"><button class="btn" style="font-size:.65rem;padding:.15rem .35rem;margin-right:.1rem;
+        background:var(--bg-input);color:var(--text-muted);
+        border:1px solid var(--border-dim)" title="Show v1.1 enrichment (CVSS / CWE / MITRE / compliance)"
+        onclick="toggleV11Detail('${_escF(f.id)}',this)">🔎</button>
+        <button class="btn" style="font-size:.65rem;padding:.15rem .35rem;margin-right:.15rem;
+        background:var(--bg-input);color:var(--text-muted);
+        border:1px solid var(--border-dim)" title="Mark as false positive"
+        onclick="markFp('${_escF(f.id)}',this)">🚫</button>
+        <button class="btn" style="font-size:.65rem;padding:.15rem .35rem;
         background:var(--risk-critical,#fc8181)22;color:var(--risk-critical,#fc8181);
-        border:1px solid var(--risk-critical,#fc8181)44"
+        border:1px solid var(--risk-critical,#fc8181)44" title="Delete finding"
         onclick="deleteFinding('${_escF(f.id)}',this)">✕</button></td>`;
   return tr;
 }

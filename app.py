@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.4.9"
+VERSION = "1.6.0"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -4019,6 +4019,173 @@ def delete_finding():
     socketio.emit('finding_deleted', {'finding_id': finding_id},
                   room=_room(project_id))
     return jsonify({'success': True})
+
+
+# ── False-positive management ────────────────────────────────────────────────
+# Uses /opt/pr0t31n/shared/pr0t31n_false_positives.py.
+# Mark removes the finding from findings.jsonl + findings.csv, appends it to
+# false_positives.json + false_positives.csv. Recover does the reverse.
+
+_GB_FP_CSV_FIELDS = [
+    "id", "title", "datetime", "ip", "port", "hostname", "risk",
+    "command", "description", "output", "cves", "sources", "service",
+    "output_file", "affected", "owasp", "nist", "remediation",
+]
+
+
+def _gb_get_project_dir(project_id):
+    """Resolve a project's directory from its registry entry."""
+    pinfo = load_projects().get('projects', {}).get(project_id)
+    if not pinfo:
+        return None
+    yaml_path = pinfo.get('yaml_path', '')
+    return Path(os.path.dirname(os.path.abspath(yaml_path)))
+
+
+def _gb_load_fp_helper():
+    """Lazy-import shared false-positives helper. Returns module or None."""
+    try:
+        import sys as _s
+        if "/opt/pr0t31n/shared" not in _s.path:
+            _s.path.insert(0, "/opt/pr0t31n/shared")
+        import pr0t31n_false_positives as _fp
+        return _fp
+    except ImportError:
+        return None
+
+
+def _gb_remove_from_jsonl(findings_file, finding_id):
+    if not os.path.exists(findings_file):
+        return None
+    kept, removed = [], None
+    with open(findings_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                if removed is None and obj.get('id') == finding_id:
+                    removed = obj
+                    continue
+            except Exception:
+                pass
+            kept.append(line)
+    if removed is not None:
+        with open(findings_file, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(kept) + ('\n' if kept else ''))
+    return removed
+
+
+def _gb_append_to_jsonl(findings_file, finding):
+    fid = finding.get('id')
+    if fid and os.path.exists(findings_file):
+        with open(findings_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                try:
+                    if json.loads(line).get('id') == fid:
+                        return False
+                except Exception:
+                    continue
+    with open(findings_file, 'a', encoding='utf-8') as f:
+        f.write(json.dumps(finding) + '\n')
+    return True
+
+
+def _gb_remove_from_csv(csv_file, finding_id):
+    if not os.path.exists(csv_file):
+        return False
+    import csv as _csv
+    with open(csv_file, newline='', encoding='utf-8') as fh:
+        rows = list(_csv.DictReader(fh))
+    kept = [r for r in rows if r.get('id') != finding_id]
+    if len(kept) == len(rows):
+        return False
+    fieldnames = list(rows[0].keys()) if rows else _GB_FP_CSV_FIELDS
+    with open(csv_file, 'w', newline='', encoding='utf-8') as fh:
+        wr = _csv.DictWriter(fh, fieldnames=fieldnames, extrasaction='ignore')
+        wr.writeheader()
+        wr.writerows(kept)
+    return True
+
+
+def _gb_append_to_csv(csv_file, finding, fieldnames):
+    import csv as _csv
+    new_file = not os.path.exists(csv_file) or os.path.getsize(csv_file) == 0
+    with open(csv_file, 'a', newline='', encoding='utf-8') as fh:
+        wr = _csv.DictWriter(fh, fieldnames=fieldnames, extrasaction='ignore')
+        if new_file:
+            wr.writeheader()
+        wr.writerow(finding)
+
+
+@app.route('/api/mark_false_positive', methods=['POST'])
+def api_mark_false_positive():
+    """Move a finding from findings.{jsonl,csv} to false_positives.{json,csv}."""
+    d          = request.get_json(force=True) or {}
+    project_id = d.get('project_id', '')
+    finding_id = d.get('finding_id', '')
+    if not project_id or not finding_id:
+        return jsonify({'error': 'project_id and finding_id required'}), 400
+    project_dir = _gb_get_project_dir(project_id)
+    if project_dir is None:
+        return jsonify({'error': 'Project not found'}), 404
+    fp_helper = _gb_load_fp_helper()
+    if fp_helper is None:
+        return jsonify({'error': 'pr0t31n_false_positives helper not installed'}), 500
+    findings_jsonl = str(project_dir / 'findings.jsonl')
+    findings_csv   = str(project_dir / 'findings.csv')
+    removed = _gb_remove_from_jsonl(findings_jsonl, finding_id)
+    if removed is None:
+        return jsonify({'error': 'Finding not found in findings.jsonl'}), 404
+    removed['marked_fp_at'] = _ts()
+    _gb_remove_from_csv(findings_csv, finding_id)
+    fp_helper.add_false_positive(str(project_dir), removed,
+                                  csv_fieldnames=_GB_FP_CSV_FIELDS)
+    socketio.emit('finding_marked_fp',
+                  {'finding_id': finding_id, 'finding': removed},
+                  room=_room(project_id))
+    return jsonify({'success': True, 'finding': removed})
+
+
+@app.route('/api/recover_false_positive', methods=['POST'])
+def api_recover_false_positive():
+    """Move a finding from false_positives.{json,csv} back to findings.{jsonl,csv}."""
+    d          = request.get_json(force=True) or {}
+    project_id = d.get('project_id', '')
+    finding_id = d.get('finding_id', '')
+    if not project_id or not finding_id:
+        return jsonify({'error': 'project_id and finding_id required'}), 400
+    project_dir = _gb_get_project_dir(project_id)
+    if project_dir is None:
+        return jsonify({'error': 'Project not found'}), 404
+    fp_helper = _gb_load_fp_helper()
+    if fp_helper is None:
+        return jsonify({'error': 'pr0t31n_false_positives helper not installed'}), 500
+    recovered = fp_helper.remove_false_positive(str(project_dir), finding_id,
+                                                  csv_fieldnames=_GB_FP_CSV_FIELDS)
+    if recovered is None:
+        return jsonify({'error': 'Finding not found in false_positives.json'}), 404
+    recovered.pop('marked_fp_at', None)
+    _gb_append_to_jsonl(str(project_dir / 'findings.jsonl'), recovered)
+    _gb_append_to_csv(str(project_dir / 'findings.csv'), recovered, _GB_FP_CSV_FIELDS)
+    socketio.emit('finding_recovered',
+                  {'finding_id': finding_id, 'finding': recovered},
+                  room=_room(project_id))
+    return jsonify({'success': True, 'finding': recovered})
+
+
+@app.route('/api/false_positives/<project_id>')
+def api_false_positives_list(project_id):
+    """List all false-positive findings for a project."""
+    project_dir = _gb_get_project_dir(project_id)
+    if project_dir is None:
+        return jsonify({'false_positives': []}), 404
+    fp_helper = _gb_load_fp_helper()
+    if fp_helper is None:
+        return jsonify({'false_positives': []})
+    return jsonify({'false_positives': fp_helper.load_false_positives(str(project_dir))})
+
 
 @app.route('/api/deleted_findings/<project_id>')
 def api_deleted_findings(project_id):
