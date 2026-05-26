@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
@@ -4185,6 +4185,56 @@ def api_false_positives_list(project_id):
     if fp_helper is None:
         return jsonify({'false_positives': []})
     return jsonify({'false_positives': fp_helper.load_false_positives(str(project_dir))})
+
+
+# ─── Device-Intelligence panel (shared aggregator) ───────────────────────
+@app.route('/api/intel/<project_id>')
+def api_intel(project_id):
+    """Aggregated device/network intelligence for Gearbox runs — uses the
+    shared aggregator_network on the producer's findings.jsonl converted to
+    a list of dicts on the fly."""
+    try:
+        import sys as _s
+        if "/opt/pr0t31n/shared" not in _s.path:
+            _s.path.insert(0, "/opt/pr0t31n/shared")
+        import pr0t31n_intel as intel
+    except ImportError:
+        return jsonify({"error": "pr0t31n_intel not installed"}), 500
+    pdir = _gb_get_project_dir(project_id)
+    if pdir is None:
+        return jsonify({"error": "project not found"}), 404
+    # Read findings — prefer the universal findings.json (post-synthesis),
+    # fall back to flattening findings.jsonl
+    pdir_p = pdir if isinstance(pdir, Path) else Path(pdir)
+    universal = pdir_p / "findings.json"
+    if universal.exists():
+        try:
+            data = json.loads(universal.read_text(encoding="utf-8"))
+            findings = data if isinstance(data, list) else []
+        except Exception:
+            findings = []
+    else:
+        findings = []
+        jsonl = pdir_p / "findings.jsonl"
+        if jsonl.exists():
+            for line in jsonl.read_text(encoding="utf-8", errors="replace").splitlines():
+                line = line.strip()
+                if not line: continue
+                try: findings.append(json.loads(line))
+                except: pass
+    # Build synthetic hosts/services from finding ip/port pairs
+    hosts = sorted({(f.get("ip") or f.get("affected_host", "")) for f in findings
+                    if isinstance(f, dict) and (f.get("ip") or f.get("affected_host"))} - {""})
+    hosts_inv = [{"ip": h} for h in hosts]
+    services = []
+    for f in findings:
+        if not isinstance(f, dict): continue
+        ip = f.get("ip") or f.get("affected_host", "")
+        port = f.get("port") or f.get("affected_port", 0)
+        if ip and port:
+            try: services.append({"ip": ip, "port": int(port)})
+            except (ValueError, TypeError): pass
+    return jsonify(intel.aggregator_network(findings, hosts_inv, services))
 
 
 @app.route('/api/deleted_findings/<project_id>')
