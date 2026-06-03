@@ -3,9 +3,10 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.7.1"
+VERSION = "1.8.0"
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
+from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session, Response, after_this_request  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
+from werkzeug.utils import secure_filename  # Werkzeug — Armin Ronacher (https://github.com/pallets/werkzeug)
 from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-SocketIO — Miguel Grinberg @miguelgrinberg (https://github.com/miguelgrinberg/flask-socketio)
 import subprocess   # stdlib — launches gearbox.py as a managed subprocess
 import threading    # stdlib — per-project reader threads for gearbox stdout/stderr
@@ -32,7 +33,7 @@ app = Flask(
     static_folder=os.path.join(_BASE_DIR, 'static'),
 )
 app.config['SECRET_KEY'] = _auth.load_secret_key()
-app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024   # 32 MB upload limit
+app.config['MAX_CONTENT_LENGTH'] = 4 * 1024 * 1024 * 1024   # 4 GB upload limit (project zip imports)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0            # disable static file caching
 app.config['SESSION_COOKIE_SECURE']      = False  # self-signed cert; HTTPS enforced server-side
 app.config['SESSION_COOKIE_HTTPONLY']    = True
@@ -4521,7 +4522,14 @@ def api_read_file():
 
 @app.route('/api/export_zip/<project_id>')
 def api_export_zip(project_id):
-    """Zip the entire project directory and return it as a download."""
+    """
+    Zip the entire project directory and stream it as a download.
+
+    Streams with an explicit Content-Length and a generator so Werkzeug's
+    dev server cleanly terminates the HTTPS response — without this, Chrome
+    reports ERR_INCOMPLETE_CHUNKED_ENCODING ("Check Internet Connection")
+    on the download. The tempfile is deleted after the response is sent.
+    """
     raw = load_projects()
     pinfo = raw.get('projects', {}).get(project_id)
     if not pinfo:
@@ -4545,25 +4553,62 @@ def api_export_zip(project_id):
     cs = re.sub(r'[^a-zA-Z0-9_-]', '', (_y.get('client_short') or 'client')).lower()
     dv = re.sub(r'[^a-zA-Z0-9_-]', '_', (_y.get('device') or 'device')).lower()
     dt = datetime.now().strftime('%Y%m%d%H%M')
-    zip_name = f"gearbox-{cs}-{dv}-{dt}.zip"
+    zip_name = f"gauntlet-{cs}-{dv}-{dt}.zip"
 
     import tempfile, zipfile
-    tmp = tempfile.NamedTemporaryFile(suffix='.zip', delete=False)
+    tmp = tempfile.NamedTemporaryFile(suffix='.zip', delete=False, prefix='gauntlet_export_')
     tmp.close()
+    tmp_path = tmp.name
     try:
-        with zipfile.ZipFile(tmp.name, 'w', zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(tmp_path, 'w', zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
             for fpath in project_dir.rglob('*'):
-                if fpath.is_file():
+                if not fpath.is_file():
+                    continue
+                # Skip symlinks and special files — they can hang the zip writer
+                try:
+                    if fpath.is_symlink():
+                        continue
+                except OSError:
+                    continue
+                try:
                     arcname = fpath.relative_to(project_dir.parent)
                     zf.write(str(fpath), str(arcname))
-        return send_file(
-            tmp.name,
-            as_attachment=True,
-            download_name=zip_name,
-            mimetype='application/zip',
-        )
+                except (OSError, PermissionError):
+                    # Skip files we can't read (broken symlinks, locked DBs, etc.)
+                    continue
+        file_size = os.path.getsize(tmp_path)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        return jsonify({'error': f'Failed to build zip: {e}'}), 500
+
+    @after_this_request
+    def _cleanup(response):
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        return response
+
+    def _stream():
+        with open(tmp_path, 'rb') as f:
+            while True:
+                chunk = f.read(64 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+
+    headers = {
+        'Content-Disposition': f'attachment; filename="{zip_name}"',
+        'Content-Length':      str(file_size),
+        'Content-Type':        'application/zip',
+        'Cache-Control':       'no-store',
+        'X-Accel-Buffering':   'no',
+    }
+    return Response(_stream(), status=200, headers=headers,
+                    mimetype='application/zip', direct_passthrough=True)
 
 
 @app.route('/api/reset_project/<project_id>', methods=['DELETE'])
@@ -4684,6 +4729,167 @@ def api_import_yaml_path():
 
     return jsonify({'project_id': project_id, 'name': name,
                     'version': version, 'already_existed': False})
+
+
+@app.route('/api/import_zip', methods=['POST'])
+def api_import_zip():
+    """
+    Import a Gauntlet-exported project zip.
+
+    The zip is expected to contain a single top-level directory holding the
+    project YAML and all run output. The project is extracted into the
+    canonical clients base and registered in projects.json.
+    """
+    import tempfile, zipfile
+
+    upload = request.files.get('zipfile')
+    if not upload or not upload.filename:
+        return jsonify({'error': 'No zip file provided'}), 400
+
+    fname = secure_filename(upload.filename)
+    if not fname.lower().endswith('.zip'):
+        return jsonify({'error': 'File must be a .zip'}), 400
+
+    # Save upload to a tempfile so zipfile can seek
+    tmp_zip = tempfile.NamedTemporaryFile(suffix='.zip', delete=False, prefix='gauntlet_import_')
+    try:
+        upload.save(tmp_zip.name)
+        tmp_zip.close()
+    except Exception as e:
+        try: os.unlink(tmp_zip.name)
+        except OSError: pass
+        return jsonify({'error': f'Failed to save upload: {e}'}), 500
+
+    try:
+        if not zipfile.is_zipfile(tmp_zip.name):
+            return jsonify({'error': 'Upload is not a valid zip file'}), 400
+
+        with zipfile.ZipFile(tmp_zip.name, 'r') as zf:
+            members = [m for m in zf.namelist() if m and not m.endswith('/')]
+            if not members:
+                return jsonify({'error': 'Zip is empty'}), 400
+
+            # Determine the top-level directory inside the zip
+            top_parts = {Path(m).parts[0] for m in members if Path(m).parts}
+            if len(top_parts) != 1:
+                return jsonify({'error': 'Zip must contain a single top-level project directory'}), 400
+            top_dir = top_parts.pop()
+
+            # Locate a YAML at the top of that directory
+            yaml_candidates = [m for m in members
+                               if Path(m).parts[:1] == (top_dir,)
+                               and len(Path(m).parts) == 2
+                               and Path(m).suffix.lower() in ('.yaml', '.yml')]
+            if not yaml_candidates:
+                return jsonify({'error': 'No project YAML found at top of zip'}), 400
+            yaml_member = yaml_candidates[0]
+
+            # Read the YAML up front to compute the destination
+            try:
+                yaml_text = zf.read(yaml_member).decode('utf-8', errors='replace')
+                ydata     = yaml.safe_load(yaml_text) or {}
+            except Exception as e:
+                return jsonify({'error': f'Failed to parse YAML in zip: {e}'}), 400
+
+            client_short = re.sub(r'[^\w-]', '_',
+                                  (ydata.get('client_short') or 'project').strip().lower()).strip('_') or 'project'
+            start_date = str(ydata.get('start_date') or '')
+            year = (start_date[:4] if len(start_date) >= 4 and start_date[:4].isdigit()
+                    else datetime.now().strftime('%Y'))
+
+            dest_parent = _clients_base() / client_short / year / 'gearbox'
+            try:
+                dest_parent.mkdir(parents=True, exist_ok=True)
+            except PermissionError:
+                dest_parent = Path.home() / 'clients' / client_short / year / 'gearbox'
+                dest_parent.mkdir(parents=True, exist_ok=True)
+
+            project_dir = dest_parent / top_dir
+            if project_dir.exists():
+                # Avoid clobbering — append a numeric suffix
+                idx = 1
+                while True:
+                    candidate = dest_parent / f"{top_dir}_imported_{idx}"
+                    if not candidate.exists():
+                        project_dir = candidate
+                        break
+                    idx += 1
+
+            project_dir.mkdir(parents=True, exist_ok=False)
+
+            # Extract — rewrite arcnames so the zip's top dir becomes project_dir
+            try:
+                for member in zf.infolist():
+                    name = member.filename
+                    if not name or name.endswith('/'):
+                        continue
+                    if name.startswith(('/', '\\')) or ':' in name or '..' in Path(name).parts:
+                        raise ValueError(f"Refusing unsafe zip entry: {name}")
+                    rel_parts = Path(name).parts[1:]  # strip the top dir
+                    if not rel_parts:
+                        continue
+                    target = (project_dir / Path(*rel_parts)).resolve()
+                    try:
+                        target.relative_to(project_dir.resolve())
+                    except ValueError:
+                        raise ValueError(f"Refusing zip entry that escapes dest: {name}")
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    with zf.open(member) as src, open(target, 'wb') as dst:
+                        shutil.copyfileobj(src, dst)
+            except Exception as e:
+                # Clean up partial extraction
+                try: shutil.rmtree(str(project_dir))
+                except OSError: pass
+                return jsonify({'error': f'Extraction failed: {e}'}), 400
+
+        # Locate the extracted YAML on disk
+        extracted_yaml = project_dir / Path(yaml_member).name
+        if not extracted_yaml.is_file():
+            # Fallback: scan project_dir for any yaml at top level
+            ys = list(project_dir.glob('*.yaml')) + list(project_dir.glob('*.yml'))
+            if not ys:
+                try: shutil.rmtree(str(project_dir))
+                except OSError: pass
+                return jsonify({'error': 'Extracted project has no YAML'}), 500
+            extracted_yaml = ys[0]
+
+        abs_yaml = str(extracted_yaml.resolve())
+
+        # Register in projects.json (de-dupe on resolved YAML path)
+        raw = load_projects()
+        projects = raw.get('projects', {})
+        version = str(ydata.get('device_model_number', '') or '').strip()
+
+        for pid, pinfo in projects.items():
+            if str(Path(pinfo.get('yaml_path', '')).resolve()) == abs_yaml:
+                return jsonify({'project_id': pid, 'name': pinfo.get('name', ''),
+                                'version': version, 'already_existed': True,
+                                'project_dir': str(project_dir)})
+
+        new_id = str(uuid.uuid4())
+        client = ydata.get('client_name') or ydata.get('client_short') or 'Unknown Client'
+        device = ydata.get('device') or 'Unknown Device'
+        name   = f"{client} — {device}"
+
+        projects[new_id] = {
+            'id':                  new_id,
+            'name':                name,
+            'yaml_path':           abs_yaml,
+            'created':             datetime.now().strftime('%Y-%m-%d'),
+            'device_model_number': version,
+        }
+        raw['projects'] = projects
+        try:
+            save_projects(raw)
+        except Exception as e:
+            return jsonify({'error': f'Failed to save projects.json: {e}'}), 500
+
+        return jsonify({'project_id': new_id, 'name': name, 'version': version,
+                        'already_existed': False, 'project_dir': str(project_dir)})
+
+    finally:
+        try: os.unlink(tmp_zip.name)
+        except OSError: pass
 
 
 @app.route('/api/targets/<project_id>')

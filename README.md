@@ -16,7 +16,7 @@ Gauntlet provides a structured, browser-based interface for hardware security as
 - **Findings management** — Deduplicated findings by UUID with inline risk override, soft-delete with audit trail, manual rename/group, and JSONL persistence.
 - **Module completion tracking** — Per-instance module status (`complete`, `skipped`, `na`, `error`) tracked in `progress.json`. Evidence validation enforces required files before marking completion.
 - **Graceful shutdown** — SIGTERM allows gearbox to run cleanup routines; SIGKILL fallback after 8 seconds. Full process tree termination via `psutil`.
-- **Export** — JSON export of full project state, ZIP export of project directory with portable relative paths.
+- **Export / Import** — JSON export of full project state, ZIP export of project directory with portable relative paths, and ZIP import of a previously-exported project from the project-selection screen.
 - **20-palette theme system** — Light and dark modes across 20 color palettes, persisted in `localStorage`.
 
 ---
@@ -85,10 +85,11 @@ Upload evidence files via the **Modules** tab. Gauntlet auto-detects the tool fr
 
 The **Findings** tab lists all deduplicated findings with risk level, tool source, host/port, and CVE IDs. Adjust risk levels inline, delete false positives (soft-delete preserves audit trail), or rename/group findings for reporting.
 
-### 5. Export
+### 5. Export / Import
 
 - **JSON Export** — full project state including all instance details, findings, and subnet/port/URL structure
-- **ZIP Export** — portable project directory archive with relative paths
+- **ZIP Export** — portable project directory archive with relative paths, streamed with explicit `Content-Length` so Chrome no longer aborts the download with `ERR_INCOMPLETE_CHUNKED_ENCODING`
+- **ZIP Import** — pick a Gauntlet-exported `.zip` from the project-selection screen via **⬆ Import Project**. The archive is extracted into the canonical clients directory (`<clients_base>/<client_short>/<year>/gearbox/<run_dir>/`) and registered in `projects.json`.
 
 ---
 
