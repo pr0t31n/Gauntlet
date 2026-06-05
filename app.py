@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.8.0"
+VERSION = "1.9.0"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session, Response, after_this_request  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from werkzeug.utils import secure_filename  # Werkzeug — Armin Ronacher (https://github.com/pallets/werkzeug)
@@ -94,10 +94,23 @@ def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
 
 
 def _discover_gearbox_projects() -> list:
-    """Walk clients_base for project_meta.json files with tool=gearbox."""
+    """Walk clients_base for project_meta.json files with tool=gearbox.
+
+    Each entry includes 'project_dir' — the absolute path of the directory
+    containing project_meta.json.  This is the authoritative locator for
+    discovered projects because not every Gearbox run produces a top-level
+    YAML (CLI-driven runs may omit it).  Per-project API routes resolve
+    the directory via _project_dir_for(), which prefers project_dir over
+    yaml_path so discovered projects without a YAML still load console
+    history, findings, and targets.
+    """
     base = _clients_base()
     raw = load_projects()
-    existing_yaml = {p.get("yaml_path", "") for p in raw.get("projects", {}).values()}
+    # Dedup against both keys — a project may have been imported via either.
+    existing_yaml = {p.get("yaml_path", "") for p in raw.get("projects", {}).values()
+                     if p.get("yaml_path")}
+    existing_dirs = {p.get("project_dir", "") for p in raw.get("projects", {}).values()
+                     if p.get("project_dir")}
     found = []
     if not base.exists():
         return found
@@ -107,561 +120,13 @@ def _discover_gearbox_projects() -> list:
             if meta.get("tool") != "gearbox":
                 continue
             proj_path = meta_file.parent
-            # Look for a YAML config in this directory
+            proj_path_str = str(proj_path)
             yaml_files = list(proj_path.glob("*.yaml")) + list(proj_path.glob("*.yml"))
             yaml_path = str(yaml_files[0]) if yaml_files else ""
-            if yaml_path in existing_yaml:
+            if (yaml_path and yaml_path in existing_yaml) or proj_path_str in existing_dirs:
                 continue
-            found.append({"path": str(proj_path), "yaml_path": yaml_path, "meta": meta})
-        except Exception:
-            pass
-    return found
-
-import platform as _platform
-
-def _clients_base() -> Path:
-    """Return the OS-appropriate clients root directory."""
-    system = _platform.system()
-    if system == "Darwin":
-        base = Path("/Users/Shared/clients")
-    elif system == "Windows":
-        base = Path("C:/clients")
-    else:
-        base = Path("/clients")
-    try:
-        base.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        base = Path.home() / "clients"
-        base.mkdir(parents=True, exist_ok=True)
-    return base
-
-
-def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
-    """
-    Build a structured Gearbox project directory:
-      <clients_base>/<client_short>/<year>/gearbox/<client_short>_<datetime>/
-    """
-    slug = re.sub(r'[^\w-]', '_', (client_short or 'project').strip().lower()).strip('_') or 'project'
-    year = (start_date[:4] if start_date and len(start_date) >= 4 and start_date[:4].isdigit()
-            else datetime.now().strftime('%Y'))
-    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-    path = _clients_base() / slug / year / "gearbox" / f"{slug}_{dt_str}"
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
-        path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _discover_gearbox_projects() -> list:
-    """Walk clients_base for project_meta.json files with tool=gearbox."""
-    base = _clients_base()
-    raw = load_projects()
-    existing_yaml = {p.get("yaml_path", "") for p in raw.get("projects", {}).values()}
-    found = []
-    if not base.exists():
-        return found
-    for meta_file in base.glob("*/*/*/*/project_meta.json"):
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            if meta.get("tool") != "gearbox":
-                continue
-            proj_path = meta_file.parent
-            # Look for a YAML config in this directory
-            yaml_files = list(proj_path.glob("*.yaml")) + list(proj_path.glob("*.yml"))
-            yaml_path = str(yaml_files[0]) if yaml_files else ""
-            if yaml_path in existing_yaml:
-                continue
-            found.append({"path": str(proj_path), "yaml_path": yaml_path, "meta": meta})
-        except Exception:
-            pass
-    return found
-
-import platform as _platform
-
-def _clients_base() -> Path:
-    """Return the OS-appropriate clients root directory."""
-    system = _platform.system()
-    if system == "Darwin":
-        base = Path("/Users/Shared/clients")
-    elif system == "Windows":
-        base = Path("C:/clients")
-    else:
-        base = Path("/clients")
-    try:
-        base.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        base = Path.home() / "clients"
-        base.mkdir(parents=True, exist_ok=True)
-    return base
-
-
-def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
-    """
-    Build a structured Gearbox project directory:
-      <clients_base>/<client_short>/<year>/gearbox/<client_short>_<datetime>/
-    """
-    slug = re.sub(r'[^\w-]', '_', (client_short or 'project').strip().lower()).strip('_') or 'project'
-    year = (start_date[:4] if start_date and len(start_date) >= 4 and start_date[:4].isdigit()
-            else datetime.now().strftime('%Y'))
-    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-    path = _clients_base() / slug / year / "gearbox" / f"{slug}_{dt_str}"
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
-        path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _discover_gearbox_projects() -> list:
-    """Walk clients_base for project_meta.json files with tool=gearbox."""
-    base = _clients_base()
-    raw = load_projects()
-    existing_yaml = {p.get("yaml_path", "") for p in raw.get("projects", {}).values()}
-    found = []
-    if not base.exists():
-        return found
-    for meta_file in base.glob("*/*/*/*/project_meta.json"):
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            if meta.get("tool") != "gearbox":
-                continue
-            proj_path = meta_file.parent
-            # Look for a YAML config in this directory
-            yaml_files = list(proj_path.glob("*.yaml")) + list(proj_path.glob("*.yml"))
-            yaml_path = str(yaml_files[0]) if yaml_files else ""
-            if yaml_path in existing_yaml:
-                continue
-            found.append({"path": str(proj_path), "yaml_path": yaml_path, "meta": meta})
-        except Exception:
-            pass
-    return found
-
-import platform as _platform
-
-def _clients_base() -> Path:
-    """Return the OS-appropriate clients root directory."""
-    system = _platform.system()
-    if system == "Darwin":
-        base = Path("/Users/Shared/clients")
-    elif system == "Windows":
-        base = Path("C:/clients")
-    else:
-        base = Path("/clients")
-    try:
-        base.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        base = Path.home() / "clients"
-        base.mkdir(parents=True, exist_ok=True)
-    return base
-
-
-def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
-    """
-    Build a structured Gearbox project directory:
-      <clients_base>/<client_short>/<year>/gearbox/<client_short>_<datetime>/
-    """
-    slug = re.sub(r'[^\w-]', '_', (client_short or 'project').strip().lower()).strip('_') or 'project'
-    year = (start_date[:4] if start_date and len(start_date) >= 4 and start_date[:4].isdigit()
-            else datetime.now().strftime('%Y'))
-    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-    path = _clients_base() / slug / year / "gearbox" / f"{slug}_{dt_str}"
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
-        path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _discover_gearbox_projects() -> list:
-    """Walk clients_base for project_meta.json files with tool=gearbox."""
-    base = _clients_base()
-    raw = load_projects()
-    existing_yaml = {p.get("yaml_path", "") for p in raw.get("projects", {}).values()}
-    found = []
-    if not base.exists():
-        return found
-    for meta_file in base.glob("*/*/*/*/project_meta.json"):
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            if meta.get("tool") != "gearbox":
-                continue
-            proj_path = meta_file.parent
-            # Look for a YAML config in this directory
-            yaml_files = list(proj_path.glob("*.yaml")) + list(proj_path.glob("*.yml"))
-            yaml_path = str(yaml_files[0]) if yaml_files else ""
-            if yaml_path in existing_yaml:
-                continue
-            found.append({"path": str(proj_path), "yaml_path": yaml_path, "meta": meta})
-        except Exception:
-            pass
-    return found
-
-import platform as _platform
-
-def _clients_base() -> Path:
-    """Return the OS-appropriate clients root directory."""
-    system = _platform.system()
-    if system == "Darwin":
-        base = Path("/Users/Shared/clients")
-    elif system == "Windows":
-        base = Path("C:/clients")
-    else:
-        base = Path("/clients")
-    try:
-        base.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        base = Path.home() / "clients"
-        base.mkdir(parents=True, exist_ok=True)
-    return base
-
-
-def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
-    """
-    Build a structured Gearbox project directory:
-      <clients_base>/<client_short>/<year>/gearbox/<client_short>_<datetime>/
-    """
-    slug = re.sub(r'[^\w-]', '_', (client_short or 'project').strip().lower()).strip('_') or 'project'
-    year = (start_date[:4] if start_date and len(start_date) >= 4 and start_date[:4].isdigit()
-            else datetime.now().strftime('%Y'))
-    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-    path = _clients_base() / slug / year / "gearbox" / f"{slug}_{dt_str}"
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
-        path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _discover_gearbox_projects() -> list:
-    """Walk clients_base for project_meta.json files with tool=gearbox."""
-    base = _clients_base()
-    raw = load_projects()
-    existing_yaml = {p.get("yaml_path", "") for p in raw.get("projects", {}).values()}
-    found = []
-    if not base.exists():
-        return found
-    for meta_file in base.glob("*/*/*/*/project_meta.json"):
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            if meta.get("tool") != "gearbox":
-                continue
-            proj_path = meta_file.parent
-            # Look for a YAML config in this directory
-            yaml_files = list(proj_path.glob("*.yaml")) + list(proj_path.glob("*.yml"))
-            yaml_path = str(yaml_files[0]) if yaml_files else ""
-            if yaml_path in existing_yaml:
-                continue
-            found.append({"path": str(proj_path), "yaml_path": yaml_path, "meta": meta})
-        except Exception:
-            pass
-    return found
-
-import platform as _platform
-
-def _clients_base() -> Path:
-    """Return the OS-appropriate clients root directory."""
-    system = _platform.system()
-    if system == "Darwin":
-        base = Path("/Users/Shared/clients")
-    elif system == "Windows":
-        base = Path("C:/clients")
-    else:
-        base = Path("/clients")
-    try:
-        base.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        base = Path.home() / "clients"
-        base.mkdir(parents=True, exist_ok=True)
-    return base
-
-
-def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
-    """
-    Build a structured Gearbox project directory:
-      <clients_base>/<client_short>/<year>/gearbox/<client_short>_<datetime>/
-    """
-    slug = re.sub(r'[^\w-]', '_', (client_short or 'project').strip().lower()).strip('_') or 'project'
-    year = (start_date[:4] if start_date and len(start_date) >= 4 and start_date[:4].isdigit()
-            else datetime.now().strftime('%Y'))
-    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-    path = _clients_base() / slug / year / "gearbox" / f"{slug}_{dt_str}"
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
-        path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _discover_gearbox_projects() -> list:
-    """Walk clients_base for project_meta.json files with tool=gearbox."""
-    base = _clients_base()
-    raw = load_projects()
-    existing_yaml = {p.get("yaml_path", "") for p in raw.get("projects", {}).values()}
-    found = []
-    if not base.exists():
-        return found
-    for meta_file in base.glob("*/*/*/*/project_meta.json"):
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            if meta.get("tool") != "gearbox":
-                continue
-            proj_path = meta_file.parent
-            # Look for a YAML config in this directory
-            yaml_files = list(proj_path.glob("*.yaml")) + list(proj_path.glob("*.yml"))
-            yaml_path = str(yaml_files[0]) if yaml_files else ""
-            if yaml_path in existing_yaml:
-                continue
-            found.append({"path": str(proj_path), "yaml_path": yaml_path, "meta": meta})
-        except Exception:
-            pass
-    return found
-
-import platform as _platform
-
-def _clients_base() -> Path:
-    """Return the OS-appropriate clients root directory."""
-    system = _platform.system()
-    if system == "Darwin":
-        base = Path("/Users/Shared/clients")
-    elif system == "Windows":
-        base = Path("C:/clients")
-    else:
-        base = Path("/clients")
-    try:
-        base.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        base = Path.home() / "clients"
-        base.mkdir(parents=True, exist_ok=True)
-    return base
-
-
-def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
-    """
-    Build a structured Gearbox project directory:
-      <clients_base>/<client_short>/<year>/gearbox/<client_short>_<datetime>/
-    """
-    slug = re.sub(r'[^\w-]', '_', (client_short or 'project').strip().lower()).strip('_') or 'project'
-    year = (start_date[:4] if start_date and len(start_date) >= 4 and start_date[:4].isdigit()
-            else datetime.now().strftime('%Y'))
-    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-    path = _clients_base() / slug / year / "gearbox" / f"{slug}_{dt_str}"
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
-        path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _discover_gearbox_projects() -> list:
-    """Walk clients_base for project_meta.json files with tool=gearbox."""
-    base = _clients_base()
-    raw = load_projects()
-    existing_yaml = {p.get("yaml_path", "") for p in raw.get("projects", {}).values()}
-    found = []
-    if not base.exists():
-        return found
-    for meta_file in base.glob("*/*/*/*/project_meta.json"):
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            if meta.get("tool") != "gearbox":
-                continue
-            proj_path = meta_file.parent
-            # Look for a YAML config in this directory
-            yaml_files = list(proj_path.glob("*.yaml")) + list(proj_path.glob("*.yml"))
-            yaml_path = str(yaml_files[0]) if yaml_files else ""
-            if yaml_path in existing_yaml:
-                continue
-            found.append({"path": str(proj_path), "yaml_path": yaml_path, "meta": meta})
-        except Exception:
-            pass
-    return found
-
-import platform as _platform
-
-def _clients_base() -> Path:
-    """Return the OS-appropriate clients root directory."""
-    system = _platform.system()
-    if system == "Darwin":
-        base = Path("/Users/Shared/clients")
-    elif system == "Windows":
-        base = Path("C:/clients")
-    else:
-        base = Path("/clients")
-    try:
-        base.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        base = Path.home() / "clients"
-        base.mkdir(parents=True, exist_ok=True)
-    return base
-
-
-def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
-    """
-    Build a structured Gearbox project directory:
-      <clients_base>/<client_short>/<year>/gearbox/<client_short>_<datetime>/
-    """
-    slug = re.sub(r'[^\w-]', '_', (client_short or 'project').strip().lower()).strip('_') or 'project'
-    year = (start_date[:4] if start_date and len(start_date) >= 4 and start_date[:4].isdigit()
-            else datetime.now().strftime('%Y'))
-    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-    path = _clients_base() / slug / year / "gearbox" / f"{slug}_{dt_str}"
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
-        path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _discover_gearbox_projects() -> list:
-    """Walk clients_base for project_meta.json files with tool=gearbox."""
-    base = _clients_base()
-    raw = load_projects()
-    existing_yaml = {p.get("yaml_path", "") for p in raw.get("projects", {}).values()}
-    found = []
-    if not base.exists():
-        return found
-    for meta_file in base.glob("*/*/*/*/project_meta.json"):
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            if meta.get("tool") != "gearbox":
-                continue
-            proj_path = meta_file.parent
-            # Look for a YAML config in this directory
-            yaml_files = list(proj_path.glob("*.yaml")) + list(proj_path.glob("*.yml"))
-            yaml_path = str(yaml_files[0]) if yaml_files else ""
-            if yaml_path in existing_yaml:
-                continue
-            found.append({"path": str(proj_path), "yaml_path": yaml_path, "meta": meta})
-        except Exception:
-            pass
-    return found
-
-import platform as _platform
-
-def _clients_base() -> Path:
-    """Return the OS-appropriate clients root directory."""
-    system = _platform.system()
-    if system == "Darwin":
-        base = Path("/Users/Shared/clients")
-    elif system == "Windows":
-        base = Path("C:/clients")
-    else:
-        base = Path("/clients")
-    try:
-        base.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        base = Path.home() / "clients"
-        base.mkdir(parents=True, exist_ok=True)
-    return base
-
-
-def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
-    """
-    Build a structured Gearbox project directory:
-      <clients_base>/<client_short>/<year>/gearbox/<client_short>_<datetime>/
-    """
-    slug = re.sub(r'[^\w-]', '_', (client_short or 'project').strip().lower()).strip('_') or 'project'
-    year = (start_date[:4] if start_date and len(start_date) >= 4 and start_date[:4].isdigit()
-            else datetime.now().strftime('%Y'))
-    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-    path = _clients_base() / slug / year / "gearbox" / f"{slug}_{dt_str}"
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
-        path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _discover_gearbox_projects() -> list:
-    """Walk clients_base for project_meta.json files with tool=gearbox."""
-    base = _clients_base()
-    raw = load_projects()
-    existing_yaml = {p.get("yaml_path", "") for p in raw.get("projects", {}).values()}
-    found = []
-    if not base.exists():
-        return found
-    for meta_file in base.glob("*/*/*/*/project_meta.json"):
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            if meta.get("tool") != "gearbox":
-                continue
-            proj_path = meta_file.parent
-            # Look for a YAML config in this directory
-            yaml_files = list(proj_path.glob("*.yaml")) + list(proj_path.glob("*.yml"))
-            yaml_path = str(yaml_files[0]) if yaml_files else ""
-            if yaml_path in existing_yaml:
-                continue
-            found.append({"path": str(proj_path), "yaml_path": yaml_path, "meta": meta})
-        except Exception:
-            pass
-    return found
-
-import platform as _platform
-
-def _clients_base() -> Path:
-    """Return the OS-appropriate clients root directory."""
-    system = _platform.system()
-    if system == "Darwin":
-        base = Path("/Users/Shared/clients")
-    elif system == "Windows":
-        base = Path("C:/clients")
-    else:
-        base = Path("/clients")
-    try:
-        base.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        base = Path.home() / "clients"
-        base.mkdir(parents=True, exist_ok=True)
-    return base
-
-
-def _build_project_dir_structured(client_short: str, start_date: str) -> Path:
-    """
-    Build a structured Gearbox project directory:
-      <clients_base>/<client_short>/<year>/gearbox/<client_short>_<datetime>/
-    """
-    slug = re.sub(r'[^\w-]', '_', (client_short or 'project').strip().lower()).strip('_') or 'project'
-    year = (start_date[:4] if start_date and len(start_date) >= 4 and start_date[:4].isdigit()
-            else datetime.now().strftime('%Y'))
-    dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-    path = _clients_base() / slug / year / "gearbox" / f"{slug}_{dt_str}"
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        path = Path.home() / "clients" / "gearbox" / f"{slug}_{dt_str}"
-        path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _discover_gearbox_projects() -> list:
-    """Walk clients_base for project_meta.json files with tool=gearbox."""
-    base = _clients_base()
-    raw = load_projects()
-    existing_yaml = {p.get("yaml_path", "") for p in raw.get("projects", {}).values()}
-    found = []
-    if not base.exists():
-        return found
-    for meta_file in base.glob("*/*/*/*/project_meta.json"):
-        try:
-            meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            if meta.get("tool") != "gearbox":
-                continue
-            proj_path = meta_file.parent
-            # Look for a YAML config in this directory
-            yaml_files = list(proj_path.glob("*.yaml")) + list(proj_path.glob("*.yml"))
-            yaml_path = str(yaml_files[0]) if yaml_files else ""
-            if yaml_path in existing_yaml:
-                continue
-            found.append({"path": str(proj_path), "yaml_path": yaml_path, "meta": meta})
+            found.append({"path": proj_path_str, "project_dir": proj_path_str,
+                          "yaml_path": yaml_path, "meta": meta})
         except Exception:
             pass
     return found
@@ -700,21 +165,42 @@ _queue_lock = threading.Lock()
 _QUEUE_FILE = os.path.join(_BASE_DIR, "execute_queue.json")
 
 def _project_dir_for(project_id: str) -> str | None:
-    """Return the project output directory path, cached to avoid repeated disk reads."""
+    """Return the project output directory path, cached to avoid repeated disk reads.
+
+    Resolution order:
+      1. The explicit 'project_dir' field in projects.json (set for projects
+         discovered via _discover_gearbox_projects() — works even when no
+         YAML file exists in the directory).
+      2. dirname(yaml_path) — legacy path for projects created through
+         Gauntlet's new_project flow, which always writes a YAML.
+
+    Returns None only when neither field resolves to an existing directory.
+    """
     if project_id in _project_dir_cache:
         return _project_dir_cache[project_id]
     raw = load_projects()
     pinfo = raw.get('projects', {}).get(project_id)
     if not pinfo:
         return None
+    # 1. Prefer explicit project_dir (discovered projects).
+    pdir = pinfo.get('project_dir', '')
+    if pdir:
+        if not os.path.isabs(pdir):
+            pdir = os.path.join(_BASE_DIR, pdir)
+        if os.path.isdir(pdir):
+            _project_dir_cache[project_id] = pdir
+            return pdir
+    # 2. Fall back to deriving from yaml_path.
     yaml_path = pinfo.get('yaml_path', '')
     if not yaml_path:
         return None
     if not os.path.isabs(yaml_path):
         yaml_path = os.path.join(_BASE_DIR, yaml_path)
     d = os.path.dirname(os.path.abspath(yaml_path))
-    _project_dir_cache[project_id] = d
-    return d
+    if os.path.isdir(d):
+        _project_dir_cache[project_id] = d
+        return d
+    return None
 
 def _buf_append(buf: dict, project_id: str, entry: dict) -> None:
     """Append to a ring buffer (trimmed to _MAX_BUFFER) and persist to disk."""
@@ -2572,7 +2058,10 @@ def index():
             save_projects(raw)
         except Exception:
             pass
-        # Auto-import Gearbox projects discovered in the clients directory
+        # Auto-import Gearbox projects discovered in the clients directory.
+        # project_dir is the authoritative locator for per-project routes
+        # (console history / findings / targets) so resolution works even
+        # when the discovered project has no top-level YAML.
     _discovered = _discover_gearbox_projects()
     if _discovered:
         _raw = load_projects()
@@ -2581,208 +2070,19 @@ def index():
             _pid  = str(__import__("uuid").uuid4())
             _meta = item["meta"]
             _cs   = _meta.get("client_short", "project")
-            _device = "device"
-            _yaml_path = item.get("yaml_path", "")
+            _yaml_path    = item.get("yaml_path", "")
+            _project_dir  = item.get("project_dir", "") or item.get("path", "")
             _raw["projects"][_pid] = {
                 "id":                _pid,
                 "name":              f"{_cs} — discovered (gearbox)",
                 "yaml_path":         _yaml_path,
+                "project_dir":       _project_dir,
                 "created":           _meta.get("created_at", "")[:10],
                 "device_model_number": "",
             }
             _changed = True
         if _changed:
             save_projects(_raw)
-        # Auto-import Gearbox projects discovered in the clients directory
-    _discovered = _discover_gearbox_projects()
-    if _discovered:
-        _raw = load_projects()
-        _changed = False
-        for item in _discovered:
-            _pid  = str(__import__("uuid").uuid4())
-            _meta = item["meta"]
-            _cs   = _meta.get("client_short", "project")
-            _device = "device"
-            _yaml_path = item.get("yaml_path", "")
-            _raw["projects"][_pid] = {
-                "id":                _pid,
-                "name":              f"{_cs} — discovered (gearbox)",
-                "yaml_path":         _yaml_path,
-                "created":           _meta.get("created_at", "")[:10],
-                "device_model_number": "",
-            }
-            _changed = True
-        if _changed:
-            save_projects(_raw)
-        # Auto-import Gearbox projects discovered in the clients directory
-    _discovered = _discover_gearbox_projects()
-    if _discovered:
-        _raw = load_projects()
-        _changed = False
-        for item in _discovered:
-            _pid  = str(__import__("uuid").uuid4())
-            _meta = item["meta"]
-            _cs   = _meta.get("client_short", "project")
-            _device = "device"
-            _yaml_path = item.get("yaml_path", "")
-            _raw["projects"][_pid] = {
-                "id":                _pid,
-                "name":              f"{_cs} — discovered (gearbox)",
-                "yaml_path":         _yaml_path,
-                "created":           _meta.get("created_at", "")[:10],
-                "device_model_number": "",
-            }
-            _changed = True
-        if _changed:
-            save_projects(_raw)
-        # Auto-import Gearbox projects discovered in the clients directory
-    _discovered = _discover_gearbox_projects()
-    if _discovered:
-        _raw = load_projects()
-        _changed = False
-        for item in _discovered:
-            _pid  = str(__import__("uuid").uuid4())
-            _meta = item["meta"]
-            _cs   = _meta.get("client_short", "project")
-            _device = "device"
-            _yaml_path = item.get("yaml_path", "")
-            _raw["projects"][_pid] = {
-                "id":                _pid,
-                "name":              f"{_cs} — discovered (gearbox)",
-                "yaml_path":         _yaml_path,
-                "created":           _meta.get("created_at", "")[:10],
-                "device_model_number": "",
-            }
-            _changed = True
-        if _changed:
-            save_projects(_raw)
-        # Auto-import Gearbox projects discovered in the clients directory
-    _discovered = _discover_gearbox_projects()
-    if _discovered:
-        _raw = load_projects()
-        _changed = False
-        for item in _discovered:
-            _pid  = str(__import__("uuid").uuid4())
-            _meta = item["meta"]
-            _cs   = _meta.get("client_short", "project")
-            _device = "device"
-            _yaml_path = item.get("yaml_path", "")
-            _raw["projects"][_pid] = {
-                "id":                _pid,
-                "name":              f"{_cs} — discovered (gearbox)",
-                "yaml_path":         _yaml_path,
-                "created":           _meta.get("created_at", "")[:10],
-                "device_model_number": "",
-            }
-            _changed = True
-        if _changed:
-            save_projects(_raw)
-        # Auto-import Gearbox projects discovered in the clients directory
-    _discovered = _discover_gearbox_projects()
-    if _discovered:
-        _raw = load_projects()
-        _changed = False
-        for item in _discovered:
-            _pid  = str(__import__("uuid").uuid4())
-            _meta = item["meta"]
-            _cs   = _meta.get("client_short", "project")
-            _device = "device"
-            _yaml_path = item.get("yaml_path", "")
-            _raw["projects"][_pid] = {
-                "id":                _pid,
-                "name":              f"{_cs} — discovered (gearbox)",
-                "yaml_path":         _yaml_path,
-                "created":           _meta.get("created_at", "")[:10],
-                "device_model_number": "",
-            }
-            _changed = True
-        if _changed:
-            save_projects(_raw)
-        # Auto-import Gearbox projects discovered in the clients directory
-    _discovered = _discover_gearbox_projects()
-    if _discovered:
-        _raw = load_projects()
-        _changed = False
-        for item in _discovered:
-            _pid  = str(__import__("uuid").uuid4())
-            _meta = item["meta"]
-            _cs   = _meta.get("client_short", "project")
-            _device = "device"
-            _yaml_path = item.get("yaml_path", "")
-            _raw["projects"][_pid] = {
-                "id":                _pid,
-                "name":              f"{_cs} — discovered (gearbox)",
-                "yaml_path":         _yaml_path,
-                "created":           _meta.get("created_at", "")[:10],
-                "device_model_number": "",
-            }
-            _changed = True
-        if _changed:
-            save_projects(_raw)
-        # Auto-import Gearbox projects discovered in the clients directory
-    _discovered = _discover_gearbox_projects()
-    if _discovered:
-        _raw = load_projects()
-        _changed = False
-        for item in _discovered:
-            _pid  = str(__import__("uuid").uuid4())
-            _meta = item["meta"]
-            _cs   = _meta.get("client_short", "project")
-            _device = "device"
-            _yaml_path = item.get("yaml_path", "")
-            _raw["projects"][_pid] = {
-                "id":                _pid,
-                "name":              f"{_cs} — discovered (gearbox)",
-                "yaml_path":         _yaml_path,
-                "created":           _meta.get("created_at", "")[:10],
-                "device_model_number": "",
-            }
-            _changed = True
-        if _changed:
-            save_projects(_raw)
-        # Auto-import Gearbox projects discovered in the clients directory
-    _discovered = _discover_gearbox_projects()
-    if _discovered:
-        _raw = load_projects()
-        _changed = False
-        for item in _discovered:
-            _pid  = str(__import__("uuid").uuid4())
-            _meta = item["meta"]
-            _cs   = _meta.get("client_short", "project")
-            _device = "device"
-            _yaml_path = item.get("yaml_path", "")
-            _raw["projects"][_pid] = {
-                "id":                _pid,
-                "name":              f"{_cs} — discovered (gearbox)",
-                "yaml_path":         _yaml_path,
-                "created":           _meta.get("created_at", "")[:10],
-                "device_model_number": "",
-            }
-            _changed = True
-        if _changed:
-            save_projects(_raw)
-        # Auto-import Gearbox projects discovered in the clients directory
-    _discovered = _discover_gearbox_projects()
-    if _discovered:
-        _raw = load_projects()
-        _changed = False
-        for item in _discovered:
-            _pid  = str(__import__("uuid").uuid4())
-            _meta = item["meta"]
-            _cs   = _meta.get("client_short", "project")
-            _device = "device"
-            _yaml_path = item.get("yaml_path", "")
-            _raw["projects"][_pid] = {
-                "id":                _pid,
-                "name":              f"{_cs} — discovered (gearbox)",
-                "yaml_path":         _yaml_path,
-                "created":           _meta.get("created_at", "")[:10],
-                "device_model_number": "",
-            }
-            _changed = True
-        if _changed:
-            save_projects(_raw)
-    return render_template('index.html', projects=projects)
 
 
 @app.route('/new_project')
@@ -3967,9 +3267,117 @@ def api_observations(project_id):
         entries = _synthesise_observations_from_findings(project_id)
     return jsonify({'entries': entries})
 
+def _load_console_history_from_disk(project_id: str, limit: int = 2000) -> list:
+    """Reconstruct console-history entries for a discovered/closed project.
+
+    The live in-memory _console_buffer is only populated by Gauntlet's
+    Popen-capture pipeline during an active scan.  For discovered projects
+    (or projects whose Gauntlet process restarted), this returns an
+    approximate transcript reconstructed from on-disk artifacts in order
+    of preference:
+
+      1. <project_dir>/console_history.jsonl  (future Gauntlet may persist)
+      2. <project_dir>/scan.log               (Gearbox writes per Section 13)
+      3. <project_dir>/gearbox_log.jsonl      (Gauntlet's own structured log)
+      4. <project_dir>/*.log                  (last-resort scan of sibling logs)
+
+    Output shape matches the live buffer: [{text, stream, ts}, ...].
+    Returns at most *limit* entries (most-recent wins).
+    """
+    pdir = _project_dir_for(project_id)
+    if not pdir:
+        return []
+    pdir_p = Path(pdir)
+
+    # 1. Native console_history.jsonl, if a future writer adds it.
+    chf = pdir_p / 'console_history.jsonl'
+    if chf.exists() and chf.stat().st_size > 0:
+        out: list = []
+        try:
+            for line in chf.read_text(encoding='utf-8', errors='replace').splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    out.append(json.loads(line))
+                except Exception:
+                    out.append({'text': line, 'stream': 'stdout', 'ts': ''})
+            if out:
+                return out[-limit:]
+        except Exception:
+            pass
+
+    # 2. Gearbox scan.log (universal Section 13 structure).
+    sl = pdir_p / 'scan.log'
+    if sl.exists() and sl.stat().st_size > 0:
+        try:
+            lines = sl.read_text(encoding='utf-8', errors='replace').splitlines()
+            out = []
+            for line in lines[-limit:]:
+                if not line.strip():
+                    continue
+                # scan.log lines start with "[YYYY-MM-DD HH:MM:SS] ..." per
+                # Gearbox convention — pull the ts when present.
+                ts = ''
+                m  = line[:1] == '['
+                if m:
+                    rb = line.find(']')
+                    if 0 < rb < 32:
+                        ts = line[1:rb]
+                stream = 'stderr' if any(w in line.lower() for w in
+                                         ('error', 'fail', 'exception',
+                                          'fatal', 'critical')) else 'stdout'
+                out.append({'text': line, 'stream': stream, 'ts': ts})
+            if out:
+                return out
+        except Exception:
+            pass
+
+    # 3. gearbox_log.jsonl — Gauntlet-written structured log.
+    gj = pdir_p / 'gearbox_log.jsonl'
+    if gj.exists() and gj.stat().st_size > 0:
+        try:
+            entries = []
+            for line in gj.read_text(encoding='utf-8', errors='replace').splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    e = json.loads(line)
+                    lvl = (e.get('level') or 'INFO').upper()
+                    stream = 'stderr' if lvl in ('ERROR', 'EXCEPTION',
+                                                  'FATAL', 'CRITICAL',
+                                                  'TOOL_ERROR') else 'stdout'
+                    msg = e.get('message') or ''
+                    if e.get('tool'):
+                        msg = f"[{e['tool']}] {msg}"
+                    entries.append({'text': msg, 'stream': stream,
+                                    'ts': e.get('ts', '')})
+                except Exception:
+                    pass
+            if entries:
+                return entries[-limit:]
+        except Exception:
+            pass
+
+    # 4. Last resort — scan any *.log files in the project directory.
+    scan = _scan_log_files_from_dir(project_id)
+    if scan:
+        return [{'text': e.get('message', ''),
+                 'stream': 'stderr' if e.get('level') == 'ERROR' else 'stdout',
+                 'ts':     e.get('ts', '')}
+                for e in scan][-limit:]
+    return []
+
+
 @app.route('/api/console_history/<project_id>')
 def api_console_history(project_id):
-    return jsonify({'entries': _console_buffer.get(project_id, [])})
+    entries = _console_buffer.get(project_id, [])
+    if not entries:
+        # Discovered projects (and projects whose Gauntlet process restarted)
+        # have no live buffer — reconstruct from on-disk scan.log/gearbox_log.
+        entries = _load_console_history_from_disk(project_id)
+    return jsonify({'entries': entries})
 
 @app.route('/api/errors/<project_id>')
 def api_errors(project_id):
@@ -4914,23 +4322,28 @@ def api_targets(project_id):
     if not pinfo:
         return jsonify({'error': 'Not found'}), 404
     try:
+        # Resolve directory via _project_dir_for (works for discovered
+        # projects that have no top-level YAML).  Falling back to yaml_path
+        # alone caused this route to silently return empty for discovered
+        # projects since 1.0 — see the bug fix in v1.9.0.
+        pdir = _project_dir_for(project_id)
+        if not pdir:
+            return jsonify({'observed_ips': [], 'ports': {}})
+        project_dir = Path(pdir)
         yaml_path   = pinfo.get('yaml_path', '')
-        if not yaml_path:
-            return jsonify({'observed_ips': [], 'ports': {}})
-        if not os.path.isabs(yaml_path):
+        if yaml_path and not os.path.isabs(yaml_path):
             yaml_path = os.path.join(_BASE_DIR, yaml_path)
-        if not os.path.exists(yaml_path):
-            return jsonify({'observed_ips': [], 'ports': {}})
-        project_dir = Path(os.path.dirname(os.path.abspath(yaml_path)))
-        try:
-            yaml_data = load_yaml(yaml_path)
-        except Exception:
-            yaml_data = {}
+        yaml_data: dict = {}
+        if yaml_path and os.path.exists(yaml_path):
+            try:
+                yaml_data = load_yaml(yaml_path)
+            except Exception:
+                yaml_data = {}
 
         # Locate the gearbox SQLite DB — try stem-named first, then any .db in dir
-        stem    = Path(yaml_path).stem
-        db_path = project_dir / f"{stem}.db"
-        if not db_path.exists():
+        stem    = Path(yaml_path).stem if yaml_path else ''
+        db_path = (project_dir / f"{stem}.db") if stem else None
+        if not (db_path and db_path.exists()):
             # Search project dir and one level of subdirs
             dbs = sorted(project_dir.glob("*.db")) + sorted(project_dir.glob("*/*.db"))
             db_path = dbs[0] if dbs else None
@@ -5501,13 +4914,18 @@ def api_findings(project_id):
     pinfo = raw.get('projects', {}).get(project_id)
     if not pinfo:
         return jsonify({'error': f'Project {project_id!r} not found'}), 404
-    yaml_path = pinfo.get('yaml_path', '')
-    if not yaml_path:
-        return jsonify({'error': 'Project has no yaml_path'}), 500
+    # Resolve project directory: prefer the discovery-time project_dir, fall
+    # back to dirname(yaml_path) for projects created via new_project.
+    # Discovered projects may legitimately have no YAML — don't 500 on them.
+    pdir = _project_dir_for(project_id)
+    if not pdir:
+        return jsonify({'error':
+            'Project has no resolvable directory (neither project_dir nor yaml_path)'}), 500
+    # load_findings only uses dirname(yaml_path) to find findings.jsonl, so
+    # synthesise a placeholder path that points at the resolved directory.
+    yaml_path = pinfo.get('yaml_path', '') or os.path.join(pdir, '_gauntlet.yaml')
     if not os.path.isabs(yaml_path):
         yaml_path = os.path.join(_BASE_DIR, yaml_path)
-    if not os.path.exists(yaml_path):
-        return jsonify({'error': f'YAML not found: {yaml_path}'}), 500
     findings = load_findings(yaml_path)
     _RISK_ORDER = {'Critical':0,'High':1,'Medium':2,'Low':3,'Informational':4,'Unknown':5}
     findings.sort(key=lambda f: (_RISK_ORDER.get(f.get('risk','Unknown'), 5),
