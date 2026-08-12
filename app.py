@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.9.0"
+VERSION = "1.10.0"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session, Response, after_this_request  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from werkzeug.utils import secure_filename  # Werkzeug — Armin Ronacher (https://github.com/pallets/werkzeug)
@@ -274,6 +274,7 @@ INTERFACE_MODULES: dict[str, list[str]] = {
     "Rca":          ["Photo", "Input", "InputConnectedPhoto", "Output", "OutputConnectedPhoto"],
     "Aux":          ["Photo", "Input", "InputConnectedPhoto", "Output", "OutputConnectedPhoto"],
     "Zigbee":       ["Photo", "Sniff", "SniffConnectedPhoto", "Flood"],
+    "Bluetooth":    ["Photo", "Bluetooth", "BluetoothConnectedPhoto"],
     "DB9":          ["Photo", "SerialDetect", "SerialDetectConnectedPhoto",
                      "CanAssess", "CanAssessConnectedPhoto"],
     "RFID":         ["Photo", "RFIDSniff", "RFIDSniffConnectedPhoto", "RFIDReplay"],
@@ -316,6 +317,9 @@ MODULE_TOOLS: dict[str, list[str]] = {
     "HdmiCEC":          ["cec-client"],
     "Sniff":            ["wireshark", "scapy"],
     "Flood":            ["scapy"],
+    "Bluetooth":        ["bluetoothctl", "btmgmt", "btmon", "gatttool", "sdptool",
+                         "l2ping", "bettercap", "crackle", "sniff_receiver.py",
+                         "ubertooth-btle"],
     "SerialDetect":     ["sigrok", "minicom"],
     "CanAssess":        ["can_detect", "candump", "canplayer"],
     "RFIDSniff":        ["proxmark3"],
