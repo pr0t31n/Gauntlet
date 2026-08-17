@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.10.0"
+VERSION = "1.11.1"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session, Response, after_this_request  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from werkzeug.utils import secure_filename  # Werkzeug — Armin Ronacher (https://github.com/pallets/werkzeug)
@@ -277,6 +277,12 @@ INTERFACE_MODULES: dict[str, list[str]] = {
     "Bluetooth":    ["Photo", "Bluetooth", "BluetoothConnectedPhoto"],
     "DB9":          ["Photo", "SerialDetect", "SerialDetectConnectedPhoto",
                      "CanAssess", "CanAssessConnectedPhoto"],
+    "WiFi":       ["Photo", "WiFi", "WiFiConnectedPhoto"],
+    "SubGHz":     ["Photo", "SubGHz", "SubGHzConnectedPhoto"],
+    "UWB":        ["Photo", "UWB", "UWBConnectedPhoto"],
+    "SmartCard":  ["Photo", "SmartCard", "SmartCardConnectedPhoto"],
+    "ZWave":      ["Photo", "ZWave", "ZWaveConnectedPhoto"],
+    "LoRa":       ["Photo", "LoRa", "LoRaConnectedPhoto"],
     "RFID":         ["Photo", "RFIDSniff", "RFIDSniffConnectedPhoto", "RFIDReplay"],
 }
 
@@ -315,15 +321,21 @@ MODULE_TOOLS: dict[str, list[str]] = {
     "HdmiDDC":          ["ddcutil", "ddccontrol"],
     "HdmiHDCP":         ["hdcp-check", "v4l2-ctl"],
     "HdmiCEC":          ["cec-client"],
-    "Sniff":            ["wireshark", "scapy"],
+    "Sniff":            ["wireshark", "scapy", "whsniff", "zbdump", "zbstumbler"],
     "Flood":            ["scapy"],
     "Bluetooth":        ["bluetoothctl", "btmgmt", "btmon", "gatttool", "sdptool",
                          "l2ping", "bettercap", "crackle", "sniff_receiver.py",
                          "ubertooth-btle"],
     "SerialDetect":     ["sigrok", "minicom"],
     "CanAssess":        ["can_detect", "candump", "canplayer"],
-    "RFIDSniff":        ["proxmark3"],
-    "RFIDReplay":       ["proxmark3"],
+    "RFIDSniff":        ["proxmark3", "chameleon_cli"],
+    "WiFi":            ["airmon-ng", "airodump-ng", "aircrack-ng", "reaver", "bully", "wash", "hcxdumptool", "hcxpcapngtool", "wifite", "bettercap", "mdk4", "iw"],
+    "SubGHz":          ["rfcat", "rtl_433", "hackrf_transfer", "hackrf_sweep", "urh_cli"],
+    "UWB":             ["uwb-sniffer"],
+    "SmartCard":       ["pcsc_scan", "opensc-tool", "gp"],
+    "ZWave":           ["ezwave", "rtl_433"],
+    "LoRa":            ["rtl_433", "urh_cli"],
+    "RFIDReplay":       ["proxmark3", "chameleon_cli"],
 }
 
 RISK_LEVELS = ["Critical", "High", "Medium", "Low", "Informational", "Unknown"]
