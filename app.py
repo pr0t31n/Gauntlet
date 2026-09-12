@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.11.3"
+VERSION = "1.11.4"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session, Response, after_this_request  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from werkzeug.utils import secure_filename  # Werkzeug — Armin Ronacher (https://github.com/pallets/werkzeug)
@@ -6219,7 +6219,11 @@ def _kill_project_process(project_id: str):
 def login():
     if request.method == 'POST':
         if not _auth.validate_csrf(request.form.get('csrf_token')):
-            return render_template('login.html', error='Invalid request token.', csrf_token=_auth.generate_csrf())
+            _uname = request.form.get('username', '').strip()
+            return render_template('login.html',
+                                   error='Session expired \u2014 please log in again.',
+                                   username=_uname,
+                                   csrf_token=_auth.generate_csrf())
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         if _auth.verify_credentials(username, password):
@@ -6405,7 +6409,7 @@ def change_password():
     force = _auth.must_change_password()
     if request.method == 'POST':
         if not _auth.validate_csrf(request.form.get('csrf_token')):
-            return render_template('change_password.html', error='Invalid request token.',
+            return render_template('change_password.html', error='Session expired \u2014 please try again.',
                                    force=force, csrf_token=_auth.generate_csrf())
         new_pw  = request.form.get('new_password', '')
         confirm = request.form.get('confirm_password', '')
