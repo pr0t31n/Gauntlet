@@ -259,6 +259,11 @@ def apply_security_headers(response):
     h["Referrer-Policy"]           = "strict-origin-when-cross-origin"
     h["Permissions-Policy"]        = "geolocation=(), microphone=(), camera=()"
     h["X-XSS-Protection"]          = "1; mode=block"
+    # Prevent browsers from caching HTML pages — a cached login page
+    # carries a stale CSRF token, causing the first login attempt after
+    # session timeout to fail with "Invalid request token."
+    h["Cache-Control"]             = "no-store, no-cache, must-revalidate, max-age=0"
+    h["Pragma"]                    = "no-cache"
     return response
 
 # ── Request gate ──────────────────────────────────────────────────────────────
@@ -274,6 +279,12 @@ def auth_gate():
     if path in _PUBLIC or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
         return None
     if not session.get("authenticated"):
+        # API routes return 401 JSON instead of redirecting to login —
+        # fetch() follows redirects silently, giving the frontend an
+        # HTML login page where it expects JSON.
+        if path.startswith("/api/"):
+            from flask import jsonify
+            return jsonify({"error": "Session expired", "authenticated": False}), 401
         return redirect(url_for("login", next=request.path))
     if must_change_password() and path != "/auth/change-password":
         return redirect(url_for("change_password"))
