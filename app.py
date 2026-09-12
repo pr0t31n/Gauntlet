@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.11.2"
+VERSION = "1.11.3"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session, Response, after_this_request  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from werkzeug.utils import secure_filename  # Werkzeug — Armin Ronacher (https://github.com/pallets/werkzeug)
@@ -6242,7 +6242,7 @@ def login():
 @app.route('/logout')
 def logout():
     session.clear()
-        import time as _t
+    import time as _t
     return redirect(url_for('login', _t=int(_t.time())))
 
 
