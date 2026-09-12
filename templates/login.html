@@ -159,5 +159,12 @@
     </form>
   </div>
 </div>
+<script>
+  /* Force-reload when the browser restores this page from bfcache.
+     A bfcache-restored page carries a consumed/expired CSRF token. */
+  window.addEventListener("pageshow", function (e) {
+    if (e.persisted) { window.location.reload(); }
+  });
+</script>
 </body>
 </html>

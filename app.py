@@ -6242,7 +6242,8 @@ def login():
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('login'))
+        import time as _t
+    return redirect(url_for('login', _t=int(_t.time())))
 
 
 @app.route('/api/session_ping', methods=['POST'])
