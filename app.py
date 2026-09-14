@@ -2644,10 +2644,19 @@ def _render_project(project_id: str, tab: str):
     completed_instances = sum(1 for i in pm.values() if i.get('completed'))
     _sys_info = {}
     try:
-        import sys as _s
-        if "/opt/pr0t31n/shared" not in _s.path:
-            _s.path.insert(0, "/opt/pr0t31n/shared")
-        import pr0t31n_system_info as _si
+        try:
+            from importlib.util import spec_from_file_location, module_from_spec
+            _spec = spec_from_file_location(
+                "pr0t31n_system_info",
+                os.path.join(os.path.dirname(__file__), "pr0t31n_system_info.py"),
+            )
+            _si = module_from_spec(_spec)
+            _spec.loader.exec_module(_si)
+        except Exception:
+            import sys as _s
+            if "/opt/pr0t31n/shared" not in _s.path:
+                _s.path.insert(0, "/opt/pr0t31n/shared")
+            import pr0t31n_system_info as _si
         _sys_info = _si.collect()
     except Exception:
         pass
@@ -2686,10 +2695,19 @@ def _render_project(project_id: str, tab: str):
 def api_system_info():
     """Return testing host/device information."""
     try:
-        import sys as _s
-        if "/opt/pr0t31n/shared" not in _s.path:
-            _s.path.insert(0, "/opt/pr0t31n/shared")
-        import pr0t31n_system_info as _si
+        try:
+            from importlib.util import spec_from_file_location, module_from_spec
+            _spec = spec_from_file_location(
+                "pr0t31n_system_info",
+                os.path.join(os.path.dirname(__file__), "pr0t31n_system_info.py"),
+            )
+            _si = module_from_spec(_spec)
+            _spec.loader.exec_module(_si)
+        except Exception:
+            import sys as _s
+            if "/opt/pr0t31n/shared" not in _s.path:
+                _s.path.insert(0, "/opt/pr0t31n/shared")
+            import pr0t31n_system_info as _si
         return jsonify(_si.collect())
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
