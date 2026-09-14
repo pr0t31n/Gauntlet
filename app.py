@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.11.8"
+VERSION = "1.11.9"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session, Response, after_this_request  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from werkzeug.utils import secure_filename  # Werkzeug — Armin Ronacher (https://github.com/pallets/werkzeug)
@@ -33,6 +33,7 @@ app = Flask(
     static_folder=os.path.join(_BASE_DIR, 'static'),
 )
 app.config['SECRET_KEY'] = _auth.load_secret_key()
+app.config['SESSION_COOKIE_NAME'] = 'gauntlet_session'
 app.config['MAX_CONTENT_LENGTH'] = 4 * 1024 * 1024 * 1024   # 4 GB upload limit (project zip imports)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0            # disable static file caching
 app.config['SESSION_COOKIE_SECURE']      = False  # self-signed cert; HTTPS enforced server-side
