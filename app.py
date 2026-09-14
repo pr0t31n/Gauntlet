@@ -41,6 +41,10 @@ app.config['SESSION_COOKIE_SAMESITE']   = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 _auth.init_auth()
 
+@app.context_processor
+def _inject_version():
+    return {"app_version": VERSION}
+
 @app.after_request
 def _no_cache(response):
     # Prevent browsers caching HTML — JS/CSS still cacheable via Flask static

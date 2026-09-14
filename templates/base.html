@@ -74,6 +74,7 @@
     </svg>
     <div>
       <a href="{{ url_for('index') }}" class="nav-title">Gauntlet</a>
+      <span class="nav-version">v{{ app_version }}</span>
       <div class="nav-subtitle">Device Security Assessment Platform</div>
     </div>
   </div>
@@ -199,6 +200,11 @@ window._fmtSize = function(b) {
 
 <!-- ── Session Timeout Warning ────────────────────────────────── -->
 <style>
+.nav-version {
+  font-size: .65rem; font-weight: 600; letter-spacing: .04em;
+  color: var(--text-muted, #888); opacity: .7; margin-left: .35rem;
+  vertical-align: middle;
+}
 .session-timeout-overlay {
   display: none; position: fixed; inset: 0;
   background: rgba(0,0,0,.65); z-index: 10000;
