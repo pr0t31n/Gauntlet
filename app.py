@@ -3,7 +3,7 @@ Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
 
-VERSION = "1.11.4"
+VERSION = "1.11.5"
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, send_file, session, Response, after_this_request  # Flask — Armin Ronacher @mitsuhiko (https://github.com/pallets/flask)
 from werkzeug.utils import secure_filename  # Werkzeug — Armin Ronacher (https://github.com/pallets/werkzeug)
@@ -2638,6 +2638,15 @@ def _render_project(project_id: str, tab: str):
     pm = enriched['progress_map']
     total_instances     = len(pm)
     completed_instances = sum(1 for i in pm.values() if i.get('completed'))
+    _sys_info = {}
+    try:
+        import sys as _s
+        if "/opt/pr0t31n/shared" not in _s.path:
+            _s.path.insert(0, "/opt/pr0t31n/shared")
+        import pr0t31n_system_info as _si
+        _sys_info = _si.collect()
+    except Exception:
+        pass
     return render_template(
         'project.html',
         project=enriched['yaml'],
@@ -2663,7 +2672,23 @@ def _render_project(project_id: str, tab: str):
         integrity_resets=enriched.get('integrity_resets', []),
         device_tool_photos=enriched.get('device_tool_photos', []),
         subdevice_photos_by_sd=enriched.get('subdevice_photos_by_sd', {}),
+        system_info=_sys_info,
     )
+
+
+# ─── API: System Info ─────────────────────────────────────────────────────────
+
+@app.route("/api/system_info")
+def api_system_info():
+    """Return testing host/device information."""
+    try:
+        import sys as _s
+        if "/opt/pr0t31n/shared" not in _s.path:
+            _s.path.insert(0, "/opt/pr0t31n/shared")
+        import pr0t31n_system_info as _si
+        return jsonify(_si.collect())
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
 
 
 # ─── API: System Cleanup ───────────────────────────────────────────────────────

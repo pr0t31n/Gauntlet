@@ -1073,6 +1073,93 @@
           {% endfor %}
         </div>
       </div>
+
+      <!-- Testing Host -->
+      {% if system_info %}
+      <div class="summary-card">
+        <div class="summary-card-title">⬡ Testing Host</div>
+        <div class="form-group" style="margin:0">
+          <span class="info-label">Hostname</span>
+          <span class="info-value">{{ system_info.hostname or '—' }}</span>
+        </div>
+        {% if system_info.interface %}
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">IP Address</span>
+          <span class="info-value" style="font-family:var(--font-mono,monospace)">{{ system_info.interface.ip or '—' }}</span>
+        </div>
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">Interface</span>
+          <span class="info-value" style="font-family:var(--font-mono,monospace)">{{ system_info.interface.name or '—' }} ({{ system_info.interface.mac or '—' }})</span>
+        </div>
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">Network</span>
+          <span class="info-value" style="font-family:var(--font-mono,monospace)">{{ system_info.interface.ip or '' }}/{{ system_info.interface.subnet_cidr or '' }}{% if system_info.interface.type %} ({{ system_info.interface.type }}){% endif %}</span>
+        </div>
+        {% if system_info.interface.gateway %}
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">Gateway</span>
+          <span class="info-value" style="font-family:var(--font-mono,monospace)">{{ system_info.interface.gateway }}</span>
+        </div>
+        {% endif %}
+        {% if system_info.interface.netmask %}
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">Subnet Mask</span>
+          <span class="info-value" style="font-family:var(--font-mono,monospace)">{{ system_info.interface.netmask }}</span>
+        </div>
+        {% endif %}
+        {% endif %}
+        {% if system_info.os %}
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">Operating System</span>
+          <span class="info-value">{{ system_info.os.os_name or '—' }}</span>
+        </div>
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">Architecture</span>
+          <span class="info-value">{{ system_info.os.machine or '—' }}</span>
+        </div>
+        {% endif %}
+        {% if system_info.hardware %}
+        {% if system_info.hardware.form_factor %}
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">Form Factor</span>
+          <span class="info-value">{{ system_info.hardware.form_factor }}</span>
+        </div>
+        {% endif %}
+        {% if system_info.hardware.board %}
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">Board / Model</span>
+          <span class="info-value">{{ system_info.hardware.board }}</span>
+        </div>
+        {% endif %}
+        {% if system_info.hardware.serial %}
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">Serial</span>
+          <span class="info-value" style="font-family:var(--font-mono,monospace)">{{ system_info.hardware.serial }}</span>
+        </div>
+        {% endif %}
+        {% endif %}
+        {% if system_info.cpu %}
+        {% if system_info.cpu.model %}
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">CPU</span>
+          <span class="info-value">{{ system_info.cpu.model }}</span>
+        </div>
+        {% endif %}
+        {% if system_info.cpu.cores %}
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">Cores / Threads</span>
+          <span class="info-value">{{ system_info.cpu.cores }}C / {{ system_info.cpu.threads }}T</span>
+        </div>
+        {% endif %}
+        {% endif %}
+        {% if system_info.ram and system_info.ram.total_human %}
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">RAM</span>
+          <span class="info-value">{{ system_info.ram.total_human }}</span>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
     </div>
   </div>
   {% endif %}
