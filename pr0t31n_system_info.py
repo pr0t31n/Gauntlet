@@ -293,6 +293,35 @@ def _active_interface() -> dict:
     return iface
 
 
+def _public_ip() -> dict:
+    """Detect external/public IP via DNS (fast) then HTTP fallback."""
+    pub: dict = {"ip": "", "source": ""}
+    # Method 1: DNS — fastest, no HTTP overhead
+    ip = _run(["dig", "+short", "myip.opendns.com", "@resolver1.opendns.com"], timeout=5)
+    if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ip):
+        pub["ip"] = ip
+        pub["source"] = "dns"
+        return pub
+    # Method 2: HTTP fallback
+    try:
+        from urllib.request import urlopen, Request
+        req = Request("https://ifconfig.me/ip", headers={"User-Agent": "curl/8.0"})
+        with urlopen(req, timeout=5) as resp:
+            ip = resp.read().decode("utf-8", errors="ignore").strip()
+        if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ip):
+            pub["ip"] = ip
+            pub["source"] = "http"
+            return pub
+    except Exception:
+        pass
+    # Method 3: curl fallback (if urllib blocked by proxy/cert issues)
+    ip = _run(["curl", "-s", "--max-time", "5", "https://ifconfig.me/ip"], timeout=8)
+    if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ip):
+        pub["ip"] = ip
+        pub["source"] = "http"
+    return pub
+
+
 def collect(*, use_cache: bool = True) -> dict:
     """Collect all system info. Results are cached after first call."""
     global _CACHE
@@ -306,6 +335,7 @@ def collect(*, use_cache: bool = True) -> dict:
         "ram":       _ram_info(),
         "hardware":  _hardware_info(),
         "interface": _active_interface(),
+        "public_ip": _public_ip(),
     }
 
     _CACHE = result

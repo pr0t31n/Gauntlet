@@ -1087,6 +1087,12 @@
           <span class="info-label">IP Address</span>
           <span class="info-value" style="font-family:var(--font-mono,monospace)">{{ system_info.interface.ip or '—' }}</span>
         </div>
+        {% if system_info.public_ip and system_info.public_ip.ip %}
+        <div class="form-group" style="margin:.5rem 0 0">
+          <span class="info-label">Public IP</span>
+          <span class="info-value" style="font-family:var(--font-mono,monospace)">{{ system_info.public_ip.ip }}</span>
+        </div>
+        {% endif %}
         <div class="form-group" style="margin:.5rem 0 0">
           <span class="info-label">Interface</span>
           <span class="info-value" style="font-family:var(--font-mono,monospace)">{{ system_info.interface.name or '—' }} ({{ system_info.interface.mac or '—' }})</span>
