@@ -11,7 +11,7 @@ from flask_socketio import SocketIO, emit, join_room, leave_room  # Flask-Socket
 import subprocess   # stdlib — launches gearbox.py as a managed subprocess
 import threading    # stdlib — per-project reader threads for gearbox stdout/stderr
 import queue        # stdlib — answer queues for gearbox interactive prompts
-import json         # stdlib — projects.json and findings JSONL serialisation
+import json         # stdlib — project metadata and findings JSONL serialisation
 import yaml         # PyYAML — Kirill Simonov (https://pyyaml.org) — project YAML parsing
 import os           # stdlib — path and environment helpers
 import re           # stdlib — __GB_ protocol token parsing
@@ -136,9 +136,6 @@ def _discover_gearbox_projects() -> list:
             pass
     return found
 
-# File storing all known project paths
-PROJECTS_FILE = os.path.join(_BASE_DIR, 'projects.json')
-
 # Active gearbox subprocesses keyed by socket session ID
 _active_procs: dict[str, subprocess.Popen] = {}
 # Answer queues keyed by socket session ID
@@ -173,7 +170,7 @@ def _project_dir_for(project_id: str) -> str | None:
     """Return the project output directory path, cached to avoid repeated disk reads.
 
     Resolution order:
-      1. The explicit 'project_dir' field in projects.json (set for projects
+      1. The explicit 'project_dir' field in gauntlet_meta.json (set for projects
          discovered via _discover_gearbox_projects() — works even when no
          YAML file exists in the directory).
       2. dirname(yaml_path) — legacy path for projects created through
@@ -487,16 +484,89 @@ def get_all_interfaces() -> list:
     return results or [{'name': 'lo', 'ip': '127.0.0.1'}]
 
 
+_gauntlet_projects_cache: dict | None = None
+
+
+def _project_dir_from_entry(entry: dict) -> str:
+    pd = entry.get("project_dir", "")
+    if pd:
+        if not os.path.isabs(pd):
+            pd = os.path.join(_BASE_DIR, pd)
+        return pd
+    yp = entry.get("yaml_path", "")
+    if yp:
+        if not os.path.isabs(yp):
+            yp = os.path.join(_BASE_DIR, yp)
+        return os.path.dirname(os.path.abspath(yp))
+    return ""
+
+
+def _scan_gauntlet_meta() -> dict:
+    base = _clients_base()
+    projects = {}
+    if not base.exists():
+        return {"projects": projects}
+    for meta_file in base.rglob("gauntlet_meta.json"):
+        try:
+            with open(meta_file, "r") as f:
+                meta = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+        pid = meta.pop("id", None)
+        if not pid:
+            continue
+        projects[pid] = meta
+    return {"projects": projects}
+
+
+def _migrate_legacy_projects_json() -> None:
+    old_file = os.path.join(_BASE_DIR, "projects.json")
+    if not os.path.exists(old_file):
+        return
+    try:
+        with open(old_file, "r") as f:
+            old_data = json.load(f)
+        for pid, entry in old_data.get("projects", {}).items():
+            pd = _project_dir_from_entry(entry)
+            if pd and os.path.isdir(pd):
+                meta_file = os.path.join(pd, "gauntlet_meta.json")
+                if not os.path.exists(meta_file):
+                    with open(meta_file, "w") as f:
+                        json.dump({"id": pid, **entry}, f, indent=2)
+        os.rename(old_file, old_file + ".bak")
+    except Exception:
+        pass
+
+
 def load_projects() -> dict:
-    if os.path.exists(PROJECTS_FILE):
-        with open(PROJECTS_FILE, 'r') as f:
-            return json.load(f)
-    return {"projects": {}}
+    global _gauntlet_projects_cache
+    if _gauntlet_projects_cache is not None:
+        return _gauntlet_projects_cache
+    _migrate_legacy_projects_json()
+    _gauntlet_projects_cache = _scan_gauntlet_meta()
+    return _gauntlet_projects_cache
 
 
 def save_projects(data: dict) -> None:
-    with open(PROJECTS_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
+    global _gauntlet_projects_cache
+    new_projects = data.get("projects", {})
+    old_projects = (_gauntlet_projects_cache or {}).get("projects", {})
+    for pid, entry in new_projects.items():
+        pd = _project_dir_from_entry(entry)
+        if pd and os.path.isdir(pd):
+            meta_file = os.path.join(pd, "gauntlet_meta.json")
+            with open(meta_file, "w") as f:
+                json.dump({"id": pid, **entry}, f, indent=2)
+    for pid in old_projects:
+        if pid not in new_projects:
+            pd = _project_dir_from_entry(old_projects[pid])
+            if pd:
+                meta_file = os.path.join(pd, "gauntlet_meta.json")
+                try:
+                    os.unlink(meta_file)
+                except OSError:
+                    pass
+    _gauntlet_projects_cache = data
 
 
 def load_yaml(path: str) -> dict:
@@ -2057,7 +2127,7 @@ def index():
     projects = {}
     needs_save = False
     for pid, pinfo in raw.get('projects', {}).items():
-        # Prefer the cached value already stored in projects.json
+        # Prefer the cached value already stored in gauntlet_meta.json
         version = str(pinfo.get('device_model_number', '') or '').strip()
         if not version:
             # Lazy migration: read from YAML and cache for future page loads
@@ -2862,7 +2932,7 @@ def update_project(project_id):
         except Exception:
             pass
 
-    # Update projects.json entry
+    # Update project metadata
     project_name = f"{data.get('client_name', 'Client')} — {data.get('device', 'Device')}"
     raw['projects'][project_id]['name']                = project_name
     raw['projects'][project_id]['yaml_path']           = new_yaml_path
@@ -4120,7 +4190,7 @@ def api_reset_project(project_id):
 
 @app.route('/api/delete_project/<project_id>', methods=['DELETE'])
 def api_delete_project(project_id):
-    """Remove the project from projects.json and delete its entire directory."""
+    """Remove the project from the registry and delete its entire directory."""
     raw = load_projects()
     projects = raw.get('projects', {})
     pinfo = projects.get(project_id)
@@ -4130,12 +4200,12 @@ def api_delete_project(project_id):
     yaml_path = Path(pinfo.get('yaml_path', ''))
     project_dir = yaml_path.parent if yaml_path.exists() else None
 
-    # Remove from projects.json first
+    # Remove from project registry first
     del projects[project_id]
     try:
         save_projects(raw)
     except Exception as e:
-        return jsonify({'error': f'Failed to update projects.json: {e}'}), 500
+        return jsonify({'error': f'Failed to update project registry: {e}'}), 500
 
     # Delete directory
     if project_dir and project_dir.is_dir():
@@ -4197,7 +4267,7 @@ def api_import_yaml_path():
     try:
         save_projects(raw)
     except Exception as e:
-        return jsonify({'error': f'Failed to save projects.json: {e}'}), 500
+        return jsonify({'error': f'Failed to save project registry: {e}'}), 500
 
     return jsonify({'project_id': project_id, 'name': name,
                     'version': version, 'already_existed': False})
@@ -4210,7 +4280,7 @@ def api_import_zip():
 
     The zip is expected to contain a single top-level directory holding the
     project YAML and all run output. The project is extracted into the
-    canonical clients base and registered in projects.json.
+    canonical clients base and registered in the project registry.
     """
     import tempfile, zipfile
 
@@ -4327,7 +4397,7 @@ def api_import_zip():
 
         abs_yaml = str(extracted_yaml.resolve())
 
-        # Register in projects.json (de-dupe on resolved YAML path)
+        # Register in project registry (de-dupe on resolved YAML path)
         raw = load_projects()
         projects = raw.get('projects', {})
         version = str(ydata.get('device_model_number', '') or '').strip()
@@ -4354,7 +4424,7 @@ def api_import_zip():
         try:
             save_projects(raw)
         except Exception as e:
-            return jsonify({'error': f'Failed to save projects.json: {e}'}), 500
+            return jsonify({'error': f'Failed to save project registry: {e}'}), 500
 
         return jsonify({'project_id': new_id, 'name': name, 'version': version,
                         'already_existed': False, 'project_dir': str(project_dir)})
