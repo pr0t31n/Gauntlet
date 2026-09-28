@@ -4155,7 +4155,7 @@ def api_export_zip(project_id):
 
 @app.route('/api/reset_project/<project_id>', methods=['DELETE'])
 def api_reset_project(project_id):
-    """Delete all files in the project directory except the YAML config."""
+    """Delete all files in the project directory except config and metadata."""
     raw = load_projects()
     pinfo = raw.get('projects', {}).get(project_id)
     if not pinfo:
@@ -4169,11 +4169,15 @@ def api_reset_project(project_id):
     if not project_dir.is_dir():
         return jsonify({'error': 'Project directory not found'}), 404
 
+    _keep = {"gauntlet_meta.json", "project_meta.json", "engagement.json",
+             "scope_meta.json", "crucible_meta.json", "vantage_meta.json"}
     deleted = 0
     errors  = []
     for item in project_dir.iterdir():
         if item.resolve() == yaml_path.resolve():
-            continue  # keep the YAML
+            continue
+        if item.name in _keep:
+            continue
         try:
             if item.is_dir():
                 shutil.rmtree(str(item))
