@@ -50,6 +50,7 @@ def phase_header(title: str) -> None:
 def info(msg: str)    -> None: cprint(f"  [*] {msg}", BLUE)
 def success(msg: str) -> None: cprint(f"  [+] {msg}", GREEN)
 def warn(msg: str)    -> None: cprint(f"  [!] {msg}", YELLOW)
+def note(msg: str)    -> None: cprint(f"  [i] {msg}", YELLOW)
 def error(msg: str)   -> None: cprint(f"  [-] {msg}", RED)
 
 # ---------------------------------------------------------------------------
@@ -200,7 +201,7 @@ def phase_brew(dry_run: bool) -> None:
     if is_root():
         sudo_user = os.environ.get("SUDO_USER", "")
         if not sudo_user:
-            warn("Running as root but SUDO_USER is not set — skipping brew install "
+            note("Running as root but SUDO_USER is not set — skipping brew install "
                  "to avoid corrupting Homebrew. Re-run as your normal user.")
             return
         base_cmd = ["sudo", "-u", sudo_user, brew_bin]
@@ -524,7 +525,7 @@ def main() -> None:
         elif os_id == "macos":
             phase_brew(dry_run)
         else:
-            warn(f"Unknown OS '{os_id}' — skipping system package phase.")
+            note(f"Unknown OS '{os_id}' — skipping system package phase.")
     else:
         info("Skipping system package phase (--skip-apt).")
 
@@ -553,7 +554,7 @@ def main() -> None:
     if is_root() or dry_run:
         phase_service(os_id, dry_run)
     else:
-        warn("Not running as root — skipping service installation. Re-run with sudo to install service.")
+        note("Not running as root — skipping service installation. Re-run with sudo to install service.")
 
     # Verify
     phase_verify(os_id)
