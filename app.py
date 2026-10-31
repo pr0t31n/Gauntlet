@@ -23,6 +23,40 @@ from pathlib import Path        # stdlib — cross-platform path handling
 import importlib.util as _imputil  # stdlib — optional module presence checks
 import _auth                        # pr0t31n — authentication, TLS and security hardening
 
+# ─── FindingsDB integration (lazy, best-effort) ───────────────────────────────
+
+_fdb_handles = {}
+_fdb_lock = threading.Lock()
+
+
+def _get_fdb(project):
+    """Return a FindingsDB handle for a project dict, or None."""
+    pid = project.get("id") or project.get("project_id", "")
+    if not pid:
+        return None
+    with _fdb_lock:
+        if pid in _fdb_handles:
+            return _fdb_handles[pid]
+    yaml_path = project.get("yaml_path", "")
+    if not yaml_path:
+        return None
+    proj_dir = str(Path(yaml_path).resolve().parent)
+    db_path = Path(proj_dir) / "findings.db"
+    if not db_path.exists():
+        return None
+    try:
+        import sys as _s
+        if "/opt/pr0t31n/shared" not in _s.path:
+            _s.path.insert(0, "/opt/pr0t31n/shared")
+        import pr0t31n_findings_db
+        handle = pr0t31n_findings_db.FindingsDB(str(db_path))
+        with _fdb_lock:
+            _fdb_handles[pid] = handle
+        return handle
+    except Exception:
+        return None
+
+
 # ─── App Setup ─────────────────────────────────────────────────────────────────
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -3561,6 +3595,13 @@ def delete_finding():
         f.write(json.dumps(removed) + '\n')
     socketio.emit('finding_deleted', {'finding_id': finding_id},
                   room=_room(project_id))
+    # Mirror to FindingsDB
+    db = _get_fdb(pinfo)
+    if db:
+        try:
+            db.delete_finding(finding_id)
+        except Exception:
+            pass
     return jsonify({'success': True})
 
 
@@ -3688,6 +3729,15 @@ def api_mark_false_positive():
     socketio.emit('finding_marked_fp',
                   {'finding_id': finding_id, 'finding': removed},
                   room=_room(project_id))
+    # Mirror to FindingsDB
+    _fp_pinfo = load_projects().get('projects', {}).get(project_id)
+    if _fp_pinfo:
+        _fp_db = _get_fdb(_fp_pinfo)
+        if _fp_db:
+            try:
+                _fp_db.mark_fp(finding_id)
+            except Exception:
+                pass
     return jsonify({'success': True, 'finding': removed})
 
 
@@ -3715,6 +3765,15 @@ def api_recover_false_positive():
     socketio.emit('finding_recovered',
                   {'finding_id': finding_id, 'finding': recovered},
                   room=_room(project_id))
+    # Mirror to FindingsDB
+    _rec_pinfo = load_projects().get('projects', {}).get(project_id)
+    if _rec_pinfo:
+        _rec_db = _get_fdb(_rec_pinfo)
+        if _rec_db:
+            try:
+                _rec_db.unmark_fp(finding_id)
+            except Exception:
+                pass
     return jsonify({'success': True, 'finding': recovered})
 
 
@@ -4823,6 +4882,14 @@ def api_update_finding_risk():
                       {'id': finding_id, 'risk': new_risk, 'title': title_found},
                       room=_room(project_id))
 
+        # Mirror to FindingsDB
+        _risk_db = _get_fdb(pinfo)
+        if _risk_db:
+            try:
+                _risk_db.set_risk_override(finding_id, new_risk)
+            except Exception:
+                pass
+
         return jsonify({
             'ok':          True,
             'finding_id':  finding_id,
@@ -4947,6 +5014,15 @@ def api_group_findings():
             'removed_ids': finding_ids,
             'new_finding': grouped,
         }, room=_room(project_id))
+        # Mirror to FindingsDB
+        _grp_db = _get_fdb(pinfo)
+        if _grp_db:
+            try:
+                for _gfid in finding_ids:
+                    _grp_db.delete_finding(_gfid)
+                _grp_db.insert_finding(grouped)
+            except Exception:
+                pass
         return jsonify({'ok': True, 'new_finding': grouped})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -5037,6 +5113,13 @@ def api_rename_finding():
         socketio.emit('finding_renamed',
                       {'id': finding_id, 'title': new_title},
                       room=_room(project_id))
+        # Mirror to FindingsDB
+        _ren_db = _get_fdb(pinfo)
+        if _ren_db:
+            try:
+                _ren_db.rename_finding(finding_id, new_title)
+            except Exception:
+                pass
         return jsonify({
             'ok':        True,
             'old_title': old_title,
@@ -5069,6 +5152,56 @@ def api_findings(project_id):
     findings.sort(key=lambda f: (_RISK_ORDER.get(f.get('risk','Unknown'), 5),
                                   f.get('title','').lower()))
     return jsonify({'findings': findings, 'count': len(findings)})
+
+
+@app.route('/api/findings/v2/<project_id>')
+def api_findings_v2(project_id):
+    """Paginated findings endpoint — uses FindingsDB when available, falls back to JSONL."""
+    raw   = load_projects()
+    pinfo = raw.get('projects', {}).get(project_id)
+    if not pinfo:
+        return jsonify({'error': 'not found'}), 404
+    db = _get_fdb(pinfo)
+    if not db:
+        pdir = _project_dir_for(project_id)
+        if not pdir:
+            return jsonify({'error': 'Project has no resolvable directory'}), 500
+        yaml_path = pinfo.get('yaml_path', '') or os.path.join(pdir, '_gauntlet.yaml')
+        if not os.path.isabs(yaml_path):
+            yaml_path = os.path.join(_BASE_DIR, yaml_path)
+        findings = load_findings(yaml_path)
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        risk_filter = request.args.get('risk', '')
+        search = request.args.get('search', '')
+        if risk_filter:
+            risks = set(r.strip().upper() for r in risk_filter.split(','))
+            findings = [f for f in findings if f.get('risk', '').upper() in risks]
+        if search:
+            sl = search.lower()
+            findings = [f for f in findings if sl in json.dumps(f).lower()]
+        total = len(findings)
+        start = (page - 1) * per_page
+        page_data = findings[start:start + per_page]
+        return jsonify({
+            'findings': page_data,
+            'total': total,
+            'page': page,
+            'pages': (total + per_page - 1) // per_page if per_page else 1,
+        })
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 50))
+    risk = request.args.get('risk', '')
+    search = request.args.get('search', '')
+    tool = request.args.get('tool', '')
+    sort = request.args.get('sort', 'risk_id')
+    order = request.args.get('order', 'asc')
+    result = db.query_findings(
+        page=page, per_page=per_page,
+        risk=risk or None, search=search or None,
+        tool=tool or None, sort=sort, order=order,
+    )
+    return jsonify(result)
 
 
 # ─── API: Clear Module ─────────────────────────────────────────────────────────
@@ -6136,6 +6269,15 @@ def _stdout_reader(proc: subprocess.Popen, project_id: str, answer_q: queue.Queu
                     }
                     _buf_append(_observations, project_id, obs)
                     socketio.emit('observation_entry', obs, room=room)
+                    # Live-inject into FindingsDB
+                    _live_pinfo = load_projects().get('projects', {}).get(project_id)
+                    if _live_pinfo:
+                        _live_db = _get_fdb(_live_pinfo)
+                        if _live_db:
+                            try:
+                                _live_db.insert_finding(finding)
+                            except Exception:
+                                pass
                 except Exception:
                     _emit_console(line)
 
