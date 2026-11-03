@@ -6528,97 +6528,11 @@ def nexus_status():
     return jsonify({"app": "gauntlet", "tool": "gauntlet", "hostname": socket.gethostname(), "scanning": bool(_active_procs), "version": VERSION})
 
 
-@app.route('/api/arbiter-projects')
-def api_arbiter_projects():
-    """Return Gauntlet/Gearbox projects as normalized project records for Arbiter."""
-    raw = load_projects()
-    result = []
-    for pid, proj in raw.get("projects", {}).items():
-        # Derive client_name from yaml_path: …/clients/<client_short>/<year>/gearbox/…
-        yaml_path = proj.get("yaml_path", "")
-        client_name = proj.get("name", pid)
-        project_dir = ""
-        if yaml_path:
-            try:
-                p = Path(yaml_path)
-                project_dir = str(p.parent)
-                parts = p.parts
-                clients_idx = next((i for i, x in enumerate(parts) if x == "clients"), None)
-                if clients_idx is not None and clients_idx + 1 < len(parts):
-                    client_name = parts[clients_idx + 1]
-            except Exception:
-                pass
-        # Read full engagement metadata from the YAML
-        _client_short = _consultant = _consultant_email = ""
-        _poc_name = _poc_email = _poc_phone = ""
-        _start = _end = ""
-        try:
-            if yaml_path and os.path.exists(yaml_path):
-                _y = load_yaml(yaml_path)
-                if isinstance(_y, dict):
-                    _client_short     = str(_y.get("client_short", "") or "")
-                    _consultant       = str(_y.get("consultant_name", "") or "")
-                    _consultant_email = str(_y.get("consultant_email", "") or "")
-                    _start            = str(_y.get("start_date", "") or "")
-                    _end              = str(_y.get("end_date", "") or "")
-                    _poc              = _y.get("client_poc", {})
-                    if isinstance(_poc, dict):
-                        _poc_name  = str(_poc.get("name",  "") or "")
-                        _poc_email = str(_poc.get("email", "") or "")
-                        _poc_phone = str(_poc.get("phone", "") or "")
-                    if _client_short:
-                        client_name = _client_short
-        except Exception:
-            pass
-        if pid in _active_procs:
-            status = "running"
-        elif proj.get("status") in ("complete", "done", "finished"):
-            status = "complete"
-        else:
-            status = "idle"
-            if yaml_path and os.path.exists(yaml_path):
-                try:
-                    _yaml_data = load_yaml(yaml_path)
-                    _progress  = load_progress(yaml_path)
-                    _pm        = compute_progress(_yaml_data, _progress)
-                    if _pm and all(v.get("completed") for v in _pm.values()):
-                        proj["status"] = "complete"
-                        raw["projects"][pid] = proj
-                        save_projects(raw)
-                        status = "complete"
-                except Exception:
-                    pass
-        _finding_count = 0
-        if yaml_path and os.path.exists(yaml_path):
-            try:
-                _finding_count = len(load_findings(yaml_path))
-            except Exception:
-                pass
-        result.append({
-            "id":               pid,
-            "name":             proj.get("name", pid),
-            "client_name":      client_name,
-            "client_short":     _client_short,
-            "consultant":       _consultant,
-            "consultant_email": _consultant_email,
-            "poc_name":         _poc_name,
-            "poc_email":        _poc_email,
-            "poc_phone":        _poc_phone,
-            "start_date":       _start,
-            "end_date":         _end,
-            "tool":             "gearbox",
-            "project_dir":      project_dir,
-            "status":           status,
-            "finding_count":    _finding_count,
-            "has_findings":     _finding_count > 0,
-            "created":          proj.get("created", ""),
-        })
-    return jsonify(result)
 
 
 @app.route('/api/projects/<project_id>/status')
 def api_project_status(project_id):
-    """Standardized status endpoint polled by Arbiter's scan_poll_worker."""
+    """Standardized status endpoint for external status polling."""
     raw = load_projects()
     if project_id not in raw.get("projects", {}):
         return jsonify({"error": "not found"}), 404
