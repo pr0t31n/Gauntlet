@@ -33,3 +33,5 @@ data/
 Thumbs.db
 
 # socket.io vendored in static/js/ — tracked in git
+ssl.key
+ssl.crt
