@@ -4229,7 +4229,7 @@ def api_reset_project(project_id):
         return jsonify({'error': 'Project directory not found'}), 404
 
     _keep = {"gauntlet_meta.json", "project_meta.json", "engagement.json",
-             "scope_meta.json", "crucible_meta.json", "vantage_meta.json"}
+             "scope_meta.json", "crucible_meta.json"}
     deleted = 0
     errors  = []
     for item in project_dir.iterdir():
