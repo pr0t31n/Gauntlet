@@ -6,6 +6,9 @@ Gauntlet provides a structured, browser-based interface for hardware security as
 
 ---
 
+
+> **[View full documentation on the Codex Wiki](https://wiki.pr0t31n.com/tools/gauntlet)** — detailed features, CLI reference, findings catalogue, and integration guides.
+
 ## Features
 
 - **Structured project management** — YAML-backed project files define devices, subdevices, interfaces, and instances. Auto-migrates human-readable instance keys from auto-generated placeholders.
