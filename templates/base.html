@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Gauntlet{% endblock %}</title>
+  <title>{% block title %}Dashboard{% endblock %}</title>
   <!-- Restore theme immediately — before CSS parses — to eliminate flash of wrong theme -->
   <script>
     (function(){
@@ -20,7 +20,7 @@
     })();
   </script>
   <!-- SVG favicon: IC Package / Gauntlet chip -->
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 88 88' fill='none'%3E%3Crect x='18' y='24' width='52' height='52' rx='4' fill='%23c8921f' opacity='.2' stroke='%23c8921f' stroke-width='3'/%3E%3Crect x='28' y='34' width='32' height='20' rx='2' fill='%23c8921f' opacity='.25' stroke='%23c8921f' stroke-width='1.5'/%3E%3Ctext font-family='monospace' font-size='9' fill='%23c8921f' x='44' y='46' text-anchor='middle'%3EGNTLT%3C/text%3E%3Ctext font-family='monospace' font-size='7' fill='%23c8921f' opacity='.7' x='44' y='56' text-anchor='middle'%3Ev1.0%3C/text%3E%3Cpath d='M18 30 A6 6 0 0 1 24 24' stroke='%23c8921f' stroke-width='2' fill='none' opacity='.5'/%3E%3Crect x='6' y='30' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='6' y='40' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='6' y='50' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='6' y='60' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='70' y='30' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='70' y='40' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='70' y='50' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='70' y='60' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='30' y='6' width='5' height='18' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='40' y='6' width='5' height='18' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='50' y='6' width='5' height='18' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='30' y='76' width='5' height='8' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='40' y='76' width='5' height='8' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='50' y='76' width='5' height='8' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 88 88' fill='none'%3E%3Crect x='18' y='24' width='52' height='52' rx='4' fill='%23c8921f' opacity='.2' stroke='%23c8921f' stroke-width='3'/%3E%3Crect x='28' y='34' width='32' height='20' rx='2' fill='%23c8921f' opacity='.25' stroke='%23c8921f' stroke-width='1.5'/%3E%3Cpath d='M18 30 A6 6 0 0 1 24 24' stroke='%23c8921f' stroke-width='2' fill='none' opacity='.5'/%3E%3Crect x='6' y='30' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='6' y='40' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='6' y='50' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='6' y='60' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='70' y='30' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='70' y='40' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='70' y='50' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='70' y='60' width='12' height='5' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='30' y='6' width='5' height='18' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='40' y='6' width='5' height='18' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='50' y='6' width='5' height='18' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='30' y='76' width='5' height='8' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='40' y='76' width='5' height='8' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3Crect x='50' y='76' width='5' height='8' rx='1.2' fill='%23c8921f' opacity='.85'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap">
@@ -43,12 +43,8 @@
             fill="currentColor" opacity=".15"
             stroke="currentColor" stroke-width="1.2"/>
       <!-- die label -->
-      <text font-family="monospace" font-size="8.5"
-            fill="currentColor" opacity=".7"
-            x="44" y="46" text-anchor="middle">GNTLT</text>
-      <text font-family="monospace" font-size="6.5"
-            fill="currentColor" opacity=".45"
-            x="44" y="55" text-anchor="middle">v1.0</text>
+      <rect x="33" y="42" width="22" height="4" rx="1" fill="currentColor" opacity=".45"/>
+      <rect x="36" y="49" width="16" height="3" rx="1" fill="currentColor" opacity=".3"/>
       <!-- pin-1 notch -->
       <path d="M18 31 A7 7 0 0 1 25 24"
             stroke="currentColor" stroke-width="1.8"
@@ -73,9 +69,7 @@
       <rect x="51" y="76" width="5" height="8"  rx="1.2" fill="currentColor" opacity=".8"/>
     </svg>
     <div>
-      <a href="{{ url_for('index') }}" class="nav-title">Gauntlet</a>
-      <span class="nav-version">v{{ app_version }}</span>
-      <div class="nav-subtitle">Device Security Assessment Platform</div>
+      <a href="{{ url_for('index') }}" class="nav-title">Dashboard</a>
     </div>
   </div>
 
@@ -154,7 +148,6 @@
 <!-- ░░ Footer ░░ -->
 <footer class="app-footer" role="contentinfo">
   <span class="footer-ornament">⚔</span>
-  <span>Gauntlet — Device Security Assessment Platform</span>
   <span class="footer-ornament">⚔</span>
 </footer>
 

@@ -6,7 +6,6 @@ import pr0t31n_auth as _mod
 _mod.configure(
     app_dir=_Path(__file__).parent,
     public_paths={"/login", "/logout", "/api/nexus-status"},
-    public_prefixes=("/api/projects/", "/api/findings/"),
     redirect_next="path",
     app_name="Gauntlet",
     version_check_tools=["Gearbox"],

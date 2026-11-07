@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Gauntlet — Project Selection{% endblock %}
+{% block title %}Project Selection{% endblock %}
 
 {% block content %}
 <div class="page-container">
@@ -59,7 +59,7 @@
               ✦ New Project
             </a>
             <button class="btn btn-secondary" id="importZipBtn"
-                    title="Import a Gauntlet-exported project zip">
+                    title="Import an exported project zip">
               ⬆ Import Project
             </button>
           </div>
@@ -200,7 +200,7 @@
     <div class="modal-body">
       <p style="margin-bottom:1rem;line-height:1.5;color:var(--text-secondary)">
         Enter the absolute filesystem path to an existing project YAML file.
-        The project will be registered in Gauntlet without moving or copying any files.
+        The project will be registered without moving or copying any files.
       </p>
       <div class="form-group">
         <label class="form-label" for="importYamlPath">YAML File Path</label>
@@ -229,8 +229,8 @@
     </div>
     <div class="modal-body">
       <p style="margin-bottom:1rem;line-height:1.5;color:var(--text-secondary)">
-        Select a Gauntlet-exported <code>.zip</code> file. The project will be
-        extracted into the local clients directory and registered in Gauntlet.
+        Select an exported <code>.zip</code> file. The project will be
+        extracted into the local clients directory and registered.
       </p>
       <div class="form-group">
         <label class="form-label" for="importZipFile">Project Zip</label>

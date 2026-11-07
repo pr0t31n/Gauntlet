@@ -20,6 +20,7 @@ import socket       # stdlib — network interface enumeration for QR URLs
 import uuid         # stdlib — finding and session unique identifiers
 from datetime import datetime, timedelta  # stdlib — timestamp generation / session lifetime
 from pathlib import Path        # stdlib — cross-platform path handling
+import time                         # stdlib — rate limiter timestamps
 import importlib.util as _imputil  # stdlib — optional module presence checks
 import _auth                        # pr0t31n — authentication, TLS and security hardening
 
@@ -70,7 +71,7 @@ app.config['SECRET_KEY'] = _auth.load_secret_key()
 app.config['SESSION_COOKIE_NAME'] = 'gauntlet_session'
 app.config['MAX_CONTENT_LENGTH'] = 4 * 1024 * 1024 * 1024   # 4 GB upload limit (project zip imports)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0            # disable static file caching
-app.config['SESSION_COOKIE_SECURE']      = False  # self-signed cert; HTTPS enforced server-side
+app.config['SESSION_COOKIE_SECURE']      = True
 app.config['SESSION_COOKIE_HTTPONLY']    = True
 app.config['SESSION_COOKIE_SAMESITE']   = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
@@ -93,7 +94,34 @@ def _no_cache(response):
 @app.before_request
 def _auth_gate():
     return _auth.auth_gate()
-socketio = SocketIO(app, async_mode='threading', cors_allowed_origins='*', manage_session=False)
+socketio = SocketIO(app, async_mode='threading', cors_allowed_origins=[], manage_session=False)
+
+# ── Login rate limiting ────────────────────────────────────────────────────────
+_login_attempts: dict = {}
+_login_lock = threading.Lock()
+_LOGIN_MAX = 5
+_LOGIN_WINDOW = 60
+_LOGIN_LOCKOUT = 900
+
+def _check_login_rate(ip: str) -> bool:
+    now = time.time()
+    with _login_lock:
+        rec = _login_attempts.get(ip)
+        if not rec:
+            return True
+        if rec.get("locked_until", 0) > now:
+            return False
+        attempts = [t for t in rec.get("times", []) if t > now - _LOGIN_WINDOW]
+        return len(attempts) < _LOGIN_MAX
+
+def _record_login_failure(ip: str) -> None:
+    now = time.time()
+    with _login_lock:
+        rec = _login_attempts.setdefault(ip, {"times": []})
+        rec["times"] = [t for t in rec.get("times", []) if t > now - _LOGIN_WINDOW]
+        rec["times"].append(now)
+        if len(rec["times"]) >= _LOGIN_MAX:
+            rec["locked_until"] = now + _LOGIN_LOCKOUT
 
 import platform as _platform
 
@@ -2272,7 +2300,7 @@ def api_export_json(project_id):
         return jsonify({'ok': True, 'filename': fname,
                         'data': export_obj})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 def _build_export(yaml_data: dict, project_dir: Path) -> dict:
@@ -2837,7 +2865,7 @@ def api_system_cleanup():
         _spec.loader.exec_module(_mod)
         results = _mod.run_cleanup()
     except Exception as e:
-        return jsonify({"overall_status": "error", "error": str(e)}), 500
+        return jsonify({"overall_status": "error", "error": "Internal error"}), 500
     return jsonify(results)
 
 
@@ -3323,7 +3351,7 @@ def upload_photo():
         return jsonify({'success': True, 'path': save_path})
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 # ─── API: Live Logs & Observations ────────────────────────────────────────────
 
@@ -3716,7 +3744,7 @@ def api_mark_false_positive():
         return jsonify({'error': 'Project not found'}), 404
     fp_helper = _gb_load_fp_helper()
     if fp_helper is None:
-        return jsonify({'error': 'pr0t31n_false_positives helper not installed'}), 500
+        return jsonify({'error': 'Required component not available'}), 500
     findings_jsonl = str(project_dir / 'findings.jsonl')
     findings_csv   = str(project_dir / 'findings.csv')
     removed = _gb_remove_from_jsonl(findings_jsonl, finding_id)
@@ -3754,7 +3782,7 @@ def api_recover_false_positive():
         return jsonify({'error': 'Project not found'}), 404
     fp_helper = _gb_load_fp_helper()
     if fp_helper is None:
-        return jsonify({'error': 'pr0t31n_false_positives helper not installed'}), 500
+        return jsonify({'error': 'Required component not available'}), 500
     recovered = fp_helper.remove_false_positive(str(project_dir), finding_id,
                                                   csv_fieldnames=_GB_FP_CSV_FIELDS)
     if recovered is None:
@@ -3801,7 +3829,7 @@ def api_intel(project_id):
             _s.path.insert(0, "/opt/pr0t31n/shared")
         import pr0t31n_intel as intel
     except ImportError:
-        return jsonify({"error": "pr0t31n_intel not installed"}), 500
+        return jsonify({"error": "Required component not available"}), 500
     pdir = _gb_get_project_dir(project_id)
     if pdir is None:
         return jsonify({"error": "project not found"}), 404
@@ -3988,7 +4016,7 @@ def api_kill_subprocess():
             pass
 
     if pid not in allowed_pids:
-        return jsonify({'error': f'PID {pid} is not a child of gearbox process {root_pid}'}), 403
+        return jsonify({'error': 'Permission denied'}), 403
 
     try:
         os.kill(pid, _sig.SIGTERM)
@@ -4007,7 +4035,7 @@ def api_kill_subprocess():
             pass
         return jsonify({'error': f'Permission denied to kill PID {pid}'}), 403
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @app.route('/api/evidence_tree/<project_id>')
@@ -4049,7 +4077,7 @@ def api_live_progress(project_id):
         pmap          = compute_progress(yaml_data, progress_data,
                                          active_project_id=project_id)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
     total_mods = sum(i['module_count'] for i in pmap.values())
     comp_mods  = sum(i['completed_count'] for i in pmap.values())
@@ -4118,7 +4146,7 @@ def api_read_file():
             content = abs_path.read_text(encoding='utf-8', errors='replace')
         return jsonify({'content': content})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @app.route('/api/export_zip/<project_id>')
@@ -4747,7 +4775,7 @@ def api_targets(project_id):
             'ports':        ports_map,
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @app.route('/api/update_finding_risk', methods=['POST'])
@@ -4899,7 +4927,7 @@ def api_update_finding_risk():
         })
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 @app.route('/api/group_findings', methods=['POST'])
 def api_group_findings():
@@ -5025,7 +5053,7 @@ def api_group_findings():
                 pass
         return jsonify({'ok': True, 'new_finding': grouped})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @app.route('/api/rename_finding', methods=['POST'])
@@ -5126,7 +5154,7 @@ def api_rename_finding():
             'db_count':  db_updated,
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @app.route('/api/findings/<project_id>')
@@ -5279,7 +5307,7 @@ def clear_module():
         return jsonify({'ok': True, 'archived': archived})
 
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 def _module_target_dir(yaml_data: dict, yaml_path: str,
@@ -5413,7 +5441,7 @@ def check_evidence():
             'valid_type':        valid_type,
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 def _mark_photo_module_complete(yaml_path: str, project_id: str,
@@ -5627,7 +5655,7 @@ def upload_evidence():
             'archived': archived,
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @app.route('/api/list_deleted/<project_id>')
@@ -5661,7 +5689,7 @@ def list_deleted(project_id):
                     })
         return jsonify({'items': items})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @app.route('/api/view_deleted_file', methods=['POST'])
@@ -5705,7 +5733,7 @@ def view_deleted_file():
                             'content':raw_bytes.decode('utf-8', errors='replace'),
                             'truncated':truncated})
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @app.route('/api/set_photo_context', methods=['POST'])
@@ -5794,7 +5822,7 @@ def scan_evidence():
             result[mod] = {'exists': bool(files), 'files': files}
         return jsonify(result)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 @app.route('/api/view_evidence', methods=['POST'])
@@ -5905,7 +5933,7 @@ def view_evidence():
                 'truncated': truncated,
             })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 # ─── API: Module Status ─────────────────────────────────────────────────────────
@@ -5929,7 +5957,7 @@ def api_module_status(project_id):
             'total':        total,
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal error'}), 500
 
 
 # ─── SocketIO: Project Rooms + Gearbox Interaction ─────────────────────────────
@@ -6482,6 +6510,11 @@ def _kill_project_process(project_id: str):
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
+        _client_ip = request.remote_addr or '0.0.0.0'
+        if not _check_login_rate(_client_ip):
+            return render_template('login.html',
+                                   error='Too many attempts \u2014 try again later.',
+                                   csrf_token=_auth.generate_csrf())
         if not _auth.validate_csrf(request.form.get('csrf_token')):
             _uname = request.form.get('username', '').strip()
             return render_template('login.html',
@@ -6494,12 +6527,14 @@ def login():
             session.permanent = True
             session['authenticated'] = True
             session['username'] = username
+            session['session_token'] = _auth.create_session_token()
             if _auth.must_change_password():
                 return redirect(url_for('change_password'))
             next_url = request.form.get('next', '').strip()
             if next_url and next_url.startswith('/') and '://' not in next_url:
                 return redirect(next_url)
             return redirect(url_for('index'))
+        _record_login_failure(_client_ip)
         next_url = request.form.get('next', '')
         return render_template('login.html', error='Invalid credentials.', username=username,
                                csrf_token=_auth.generate_csrf(), next_url=next_url)
@@ -6509,9 +6544,9 @@ def login():
 
 @app.route('/logout')
 def logout():
+    _auth.revoke_session_token(session.get('session_token'))
     session.clear()
-    import time as _t
-    return redirect(url_for('login', _t=int(_t.time())))
+    return redirect(url_for('login', _t=int(time.time())))
 
 
 @app.route('/api/session_ping', methods=['POST'])
@@ -6525,8 +6560,22 @@ def session_ping():
 @app.route('/api/nexus-status')
 def nexus_status():
     """Unauthenticated status probe for the Nexus hub."""
-    return jsonify({"app": "gauntlet", "tool": "gauntlet", "hostname": socket.gethostname(), "scanning": bool(_active_procs), "version": VERSION})
+    return jsonify({"status": "online"})
 
+
+@app.errorhandler(404)
+def _err_404(_e):
+    if request.path.startswith('/api/'):
+        return jsonify({'error': 'Not found'}), 404
+    return ('', 404)
+
+@app.errorhandler(405)
+def _err_405(_e):
+    return jsonify({'error': 'Method not allowed'}), 405
+
+@app.errorhandler(500)
+def _err_500(_e):
+    return jsonify({'error': 'Internal error'}), 500
 
 
 
