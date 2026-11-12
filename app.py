@@ -6560,7 +6560,7 @@ def session_ping():
 @app.route('/api/nexus-status')
 def nexus_status():
     """Unauthenticated status probe for the Nexus hub."""
-    return jsonify({"status": "online"})
+    return jsonify({"status": "online", "version": VERSION})
 
 
 @app.errorhandler(404)
