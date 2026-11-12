@@ -2,6 +2,7 @@
 Gauntlet — Flask Application
 Manages device security assessment projects and interactive testing via gearbox.py
 """
+from pathlib import Path
 
 VERSION = Path(__file__).resolve().parent.joinpath("VERSION").read_text().strip()
 
@@ -19,7 +20,7 @@ import shutil       # stdlib — ZIP export and file operations
 import socket       # stdlib — network interface enumeration for QR URLs
 import uuid         # stdlib — finding and session unique identifiers
 from datetime import datetime, timedelta  # stdlib — timestamp generation / session lifetime
-from pathlib import Path        # stdlib — cross-platform path handling
+
 import time                         # stdlib — rate limiter timestamps
 import importlib.util as _imputil  # stdlib — optional module presence checks
 import _auth                        # pr0t31n — authentication, TLS and security hardening
