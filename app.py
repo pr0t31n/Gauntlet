@@ -596,7 +596,7 @@ def _migrate_legacy_projects_json() -> None:
                 if not os.path.exists(meta_file):
                     with open(meta_file, "w") as f:
                         json.dump({"id": pid, **entry}, f, indent=2)
-        os.rename(old_file, old_file + ".bak")
+        os.remove(old_file)
     except Exception:
         pass
 
