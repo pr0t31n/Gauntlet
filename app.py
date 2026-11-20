@@ -2238,6 +2238,8 @@ def index():
         if _changed:
             save_projects(_raw)
 
+    return render_template('index.html', projects=projects)
+
 
 @app.route('/new_project')
 def new_project():
